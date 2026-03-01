@@ -1,11 +1,15 @@
 """
-Models for YourResourceModel
+Models for Recommendation
 
 All of the models are stored in this module
 """
 
 import logging
+from datetime import datetime, timezone
+
 from flask_sqlalchemy import SQLAlchemy
+from sqlalchemy import CheckConstraint
+from sqlalchemy import Enum as SAEnum
 
 logger = logging.getLogger("flask.app")
 
@@ -14,84 +18,135 @@ db = SQLAlchemy()
 
 
 class DataValidationError(Exception):
-    """Used for an data validation errors when deserializing"""
+    """Used for data validation errors when deserializing"""
 
 
-class YourResourceModel(db.Model):
+RECOMMENDATION_TYPES = ("cross_sell", "up_sell", "accessory", "similar_item")
+
+
+class Recommendation(db.Model):
     """
-    Class that represents a YourResourceModel
+    Class that represents a product recommendation relationship
     """
+
+    __tablename__ = "recommendations"
+    __table_args__ = (
+        CheckConstraint(
+            "product_id <> recommended_product_id",
+            name="ck_recommendations_distinct_products",
+        ),
+    )
 
     ##################################################
     # Table Schema
     ##################################################
     id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(63))
-
-    # Todo: Place the rest of your schema here...
+    product_id = db.Column(db.Integer, nullable=False)
+    recommended_product_id = db.Column(db.Integer, nullable=False)
+    recommendation_type = db.Column(
+        SAEnum(*RECOMMENDATION_TYPES, name="recommendation_type"),
+        nullable=False,
+    )
+    score = db.Column(db.Float, nullable=True)
+    created_at = db.Column(
+        db.DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        nullable=False,
+    )
 
     def __repr__(self):
-        return f"<YourResourceModel {self.name} id=[{self.id}]>"
+        return (
+            f"<Recommendation id=[{self.id}] product={self.product_id} "
+            f"recommended_product={self.recommended_product_id}>"
+        )
+
+    def _validate(self):
+        """Validates cross-field and enum constraints"""
+        if self.recommendation_type not in RECOMMENDATION_TYPES:
+            raise DataValidationError(
+                f"Invalid recommendation_type: {self.recommendation_type}"
+            )
+        if self.product_id == self.recommended_product_id:
+            raise DataValidationError(
+                "product_id and recommended_product_id must not be equal"
+            )
 
     def create(self):
         """
-        Creates a YourResourceModel to the database
+        Creates a Recommendation in the database
         """
-        logger.info("Creating %s", self.name)
+        logger.info(
+            "Creating recommendation for product=%s recommended_product=%s",
+            self.product_id,
+            self.recommended_product_id,
+        )
         self.id = None  # pylint: disable=invalid-name
+        self._validate()
         try:
             db.session.add(self)
             db.session.commit()
-        except Exception as e:
+        except Exception as error:  # pylint: disable=broad-except
             db.session.rollback()
             logger.error("Error creating record: %s", self)
-            raise DataValidationError(e) from e
+            raise DataValidationError(error) from error
 
     def update(self):
         """
-        Updates a YourResourceModel to the database
+        Updates a Recommendation in the database
         """
-        logger.info("Saving %s", self.name)
+        logger.info("Saving recommendation id=%s", self.id)
+        self._validate()
         try:
             db.session.commit()
-        except Exception as e:
+        except Exception as error:  # pylint: disable=broad-except
             db.session.rollback()
             logger.error("Error updating record: %s", self)
-            raise DataValidationError(e) from e
+            raise DataValidationError(error) from error
 
     def delete(self):
-        """Removes a YourResourceModel from the data store"""
-        logger.info("Deleting %s", self.name)
+        """Removes a Recommendation from the data store"""
+        logger.info("Deleting recommendation id=%s", self.id)
         try:
             db.session.delete(self)
             db.session.commit()
-        except Exception as e:
+        except Exception as error:  # pylint: disable=broad-except
             db.session.rollback()
             logger.error("Error deleting record: %s", self)
-            raise DataValidationError(e) from e
+            raise DataValidationError(error) from error
 
     def serialize(self):
-        """Serializes a YourResourceModel into a dictionary"""
-        return {"id": self.id, "name": self.name}
+        """Serializes a Recommendation into a dictionary"""
+        return {
+            "id": self.id,
+            "product_id": self.product_id,
+            "recommended_product_id": self.recommended_product_id,
+            "recommendation_type": self.recommendation_type,
+            "score": self.score,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+        }
 
     def deserialize(self, data):
         """
-        Deserializes a YourResourceModel from a dictionary
+        Deserializes a Recommendation from a dictionary
 
         Args:
-            data (dict): A dictionary containing the resource data
+            data (dict): A dictionary containing recommendation data
         """
         try:
-            self.name = data["name"]
+            self.product_id = int(data["product_id"])
+            self.recommended_product_id = int(data["recommended_product_id"])
+            self.recommendation_type = str(data["recommendation_type"])
+            self.score = float(data["score"]) if data.get("score") is not None else None
+            self._validate()
         except AttributeError as error:
             raise DataValidationError("Invalid attribute: " + error.args[0]) from error
         except KeyError as error:
             raise DataValidationError(
-                "Invalid YourResourceModel: missing " + error.args[0]
+                "Invalid Recommendation: missing " + error.args[0]
             ) from error
-        except TypeError as error:
+        except (TypeError, ValueError) as error:
             raise DataValidationError(
-                "Invalid YourResourceModel: body of request contained bad or no data "
+                "Invalid Recommendation: body of request contained bad or no data "
                 + str(error)
             ) from error
         return self
@@ -102,22 +157,18 @@ class YourResourceModel(db.Model):
 
     @classmethod
     def all(cls):
-        """Returns all of the YourResourceModels in the database"""
-        logger.info("Processing all YourResourceModels")
+        """Returns all of the Recommendations in the database"""
+        logger.info("Processing all Recommendations")
         return cls.query.all()
 
     @classmethod
     def find(cls, by_id):
-        """Finds a YourResourceModel by it's ID"""
+        """Finds a Recommendation by its ID"""
         logger.info("Processing lookup for id %s ...", by_id)
         return cls.query.session.get(cls, by_id)
 
     @classmethod
-    def find_by_name(cls, name):
-        """Returns all YourResourceModels with the given name
-
-        Args:
-            name (string): the name of the YourResourceModels you want to match
-        """
-        logger.info("Processing name query for %s ...", name)
-        return cls.query.filter(cls.name == name)
+    def find_by_product_id(cls, product_id):
+        """Returns all Recommendations with the given product_id"""
+        logger.info("Processing product_id query for %s ...", product_id)
+        return cls.query.filter(cls.product_id == product_id)

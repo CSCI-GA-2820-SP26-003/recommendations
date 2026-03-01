@@ -22,9 +22,11 @@ Test cases for Pet Model
 import os
 import logging
 from unittest import TestCase
+from unittest.mock import patch
+from sqlalchemy import inspect
 from wsgi import app
-from service.models import YourResourceModel, DataValidationError, db
-from .factories import YourResourceModelFactory
+from service.models import Recommendation, DataValidationError, db
+from .factories import RecommendationFactory
 
 DATABASE_URI = os.getenv(
     "DATABASE_URI", "postgresql+psycopg://postgres:postgres@localhost:5432/testdb"
@@ -32,11 +34,11 @@ DATABASE_URI = os.getenv(
 
 
 ######################################################################
-#  YourResourceModel   M O D E L   T E S T   C A S E S
+#  Recommendation   M O D E L   T E S T   C A S E S
 ######################################################################
 # pylint: disable=too-many-public-methods
-class TestYourResourceModel(TestCase):
-    """Test Cases for YourResourceModel Model"""
+class TestRecommendationModel(TestCase):
+    """Test Cases for Recommendation Model"""
 
     @classmethod
     def setUpClass(cls):
@@ -54,7 +56,7 @@ class TestYourResourceModel(TestCase):
 
     def setUp(self):
         """This runs before each test"""
-        db.session.query(YourResourceModel).delete()  # clean up the last tests
+        db.session.query(Recommendation).delete()  # clean up the last tests
         db.session.commit()
 
     def tearDown(self):
@@ -65,15 +67,161 @@ class TestYourResourceModel(TestCase):
     #  T E S T   C A S E S
     ######################################################################
 
-    def test_example_replace_this(self):
-        """It should create a YourResourceModel"""
-        # Todo: Remove this test case example
-        resource = YourResourceModelFactory()
-        resource.create()
-        self.assertIsNotNone(resource.id)
-        found = YourResourceModel.all()
-        self.assertEqual(len(found), 1)
-        data = YourResourceModel.find(resource.id)
-        self.assertEqual(data.name, resource.name)
+    def test_table_exists(self):
+        """It should create recommendations table"""
+        inspector = inspect(db.engine)
+        self.assertIn("recommendations", inspector.get_table_names())
 
-    # Todo: Add your test cases here...
+    def test_create_recommendation(self):
+        """It should create a Recommendation"""
+        recommendation = RecommendationFactory()
+        recommendation.create()
+
+        self.assertIsNotNone(recommendation.id)
+        found = Recommendation.all()
+        self.assertEqual(len(found), 1)
+
+        data = Recommendation.find(recommendation.id)
+        self.assertEqual(data.product_id, recommendation.product_id)
+        self.assertEqual(
+            data.recommended_product_id, recommendation.recommended_product_id
+        )
+        self.assertEqual(data.recommendation_type, recommendation.recommendation_type)
+        self.assertEqual(data.score, recommendation.score)
+        self.assertIsNotNone(data.created_at)
+
+    def test_serialize_recommendation(self):
+        """It should serialize a Recommendation"""
+        recommendation = RecommendationFactory()
+        recommendation.create()
+
+        data = recommendation.serialize()
+        self.assertEqual(data["id"], recommendation.id)
+        self.assertEqual(data["product_id"], recommendation.product_id)
+        self.assertEqual(
+            data["recommended_product_id"], recommendation.recommended_product_id
+        )
+        self.assertEqual(data["recommendation_type"], recommendation.recommendation_type)
+        self.assertEqual(data["score"], recommendation.score)
+        self.assertIsNotNone(data["created_at"])
+
+    def test_deserialize_recommendation(self):
+        """It should deserialize a Recommendation"""
+        payload = {
+            "product_id": 1,
+            "recommended_product_id": 2,
+            "recommendation_type": "cross_sell",
+            "score": 0.75,
+        }
+        recommendation = Recommendation()
+        recommendation.deserialize(payload)
+        self.assertEqual(recommendation.product_id, 1)
+        self.assertEqual(recommendation.recommended_product_id, 2)
+        self.assertEqual(recommendation.recommendation_type, "cross_sell")
+        self.assertEqual(recommendation.score, 0.75)
+
+    def test_update_recommendation(self):
+        """It should update a Recommendation"""
+        recommendation = RecommendationFactory()
+        recommendation.create()
+
+        recommendation.score = 0.9
+        recommendation.update()
+
+        updated = Recommendation.find(recommendation.id)
+        self.assertEqual(updated.score, 0.9)
+
+    def test_delete_recommendation(self):
+        """It should delete a Recommendation"""
+        recommendation = RecommendationFactory()
+        recommendation.create()
+
+        recommendation.delete()
+        self.assertIsNone(Recommendation.find(recommendation.id))
+
+    def test_find_by_product_id(self):
+        """It should find Recommendations by product_id"""
+        recommendation = RecommendationFactory(product_id=500, recommended_product_id=600)
+        recommendation.create()
+        RecommendationFactory(product_id=501, recommended_product_id=601).create()
+
+        found = Recommendation.find_by_product_id(500).all()
+        self.assertEqual(len(found), 1)
+        self.assertEqual(found[0].id, recommendation.id)
+
+    def test_create_recommendation_type_validation(self):
+        """It should reject invalid recommendation_type"""
+        recommendation = Recommendation()
+        payload = {
+            "product_id": 1,
+            "recommended_product_id": 2,
+            "recommendation_type": "invalid_type",
+            "score": 0.5,
+        }
+        self.assertRaises(DataValidationError, recommendation.deserialize, payload)
+
+    def test_create_distinct_product_validation(self):
+        """It should reject equal product_id and recommended_product_id"""
+        recommendation = Recommendation()
+        payload = {
+            "product_id": 1,
+            "recommended_product_id": 1,
+            "recommendation_type": "cross_sell",
+            "score": 0.5,
+        }
+        self.assertRaises(DataValidationError, recommendation.deserialize, payload)
+
+    def test_deserialize_missing_data(self):
+        """It should reject missing required fields"""
+        recommendation = Recommendation()
+        payload = {"recommended_product_id": 2, "recommendation_type": "cross_sell"}
+        self.assertRaises(DataValidationError, recommendation.deserialize, payload)
+
+    def test_deserialize_bad_type(self):
+        """It should reject non-dict input data"""
+        recommendation = Recommendation()
+        self.assertRaises(DataValidationError, recommendation.deserialize, "bad data")
+
+    def test_deserialize_invalid_attribute(self):
+        """It should reject objects that do not expose dict-like .get"""
+        recommendation = Recommendation()
+
+        class IncompleteData:  # pylint: disable=too-few-public-methods
+            """Supports index access but not .get, to trigger AttributeError"""
+
+            def __getitem__(self, key):
+                data = {
+                    "product_id": 1,
+                    "recommended_product_id": 2,
+                    "recommendation_type": "cross_sell",
+                }
+                return data[key]
+
+        self.assertRaises(DataValidationError, recommendation.deserialize, IncompleteData())
+
+    def test_repr(self):
+        """It should render __repr__"""
+        recommendation = RecommendationFactory()
+        representation = repr(recommendation)
+        self.assertIn("Recommendation", representation)
+        self.assertIn("product=", representation)
+
+    def test_create_handles_db_exception(self):
+        """It should raise DataValidationError when create commit fails"""
+        recommendation = RecommendationFactory.build()
+        with patch("service.models.db.session.commit", side_effect=Exception("boom")):
+            self.assertRaises(DataValidationError, recommendation.create)
+
+    def test_update_handles_db_exception(self):
+        """It should raise DataValidationError when update commit fails"""
+        recommendation = RecommendationFactory()
+        recommendation.create()
+        with patch("service.models.db.session.commit", side_effect=Exception("boom")):
+            self.assertRaises(DataValidationError, recommendation.update)
+
+    def test_delete_handles_db_exception(self):
+        """It should raise DataValidationError when delete commit fails"""
+        recommendation = RecommendationFactory()
+        recommendation.create()
+        with patch("service.models.db.session.commit", side_effect=Exception("boom")):
+            self.assertRaises(DataValidationError, recommendation.delete)

@@ -2,19 +2,22 @@
 Test Factory to make fake objects for testing
 """
 
+import random
+
 import factory
-from service.models import YourResourceModel
+from service.models import Recommendation, RECOMMENDATION_TYPES
 
 
-class YourResourceModelFactory(factory.Factory):
-    """Creates fake pets that you don't have to feed"""
+class RecommendationFactory(factory.Factory):
+    """Creates fake recommendations"""
 
     class Meta:  # pylint: disable=too-few-public-methods
         """Maps factory to data model"""
 
-        model = YourResourceModel
+        model = Recommendation
 
-    id = factory.Sequence(lambda n: n)
-    name = factory.Faker("first_name")
-
-    # Todo: Add your other attributes here...
+    id = factory.Sequence(lambda n: n + 1)
+    product_id = factory.Sequence(lambda n: n + 100)
+    recommended_product_id = factory.Sequence(lambda n: n + 200)
+    recommendation_type = factory.Iterator(RECOMMENDATION_TYPES)
+    score = factory.LazyFunction(lambda: round(random.uniform(0.0, 1.0), 2))
