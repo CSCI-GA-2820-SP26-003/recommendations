@@ -198,6 +198,7 @@ class TestUpdateRecommendation(TestCase):
 
     def setUp(self):
         """Run before each test"""
+        db.session.rollback()
         db.session.query(Recommendation).delete()
         db.session.commit()
         self.client = app.test_client()
@@ -277,9 +278,9 @@ class TestUpdateRecommendation(TestCase):
         )
 
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
-        # Verify record was not modified
-        unchanged = Recommendation.find(recommendation.id)
-        self.assertEqual(unchanged.recommendation_type, original_type)
+        # Verify record was not modified in the database
+        db.session.expire(recommendation)
+        self.assertEqual(recommendation.recommendation_type, original_type)
 
     def test_update_recommendation_equal_product_ids(self):
         """It should return 400 when product_id equals recommended_product_id"""
