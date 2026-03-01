@@ -22,9 +22,10 @@ and Delete YourResourceModel
 """
 
 import os
-from flask import jsonify
+from flask import abort, jsonify, request
 from flask import current_app as app  # Import Flask application
 from service.common import status  # HTTP Status Codes
+from service.models import Recommendation
 
 
 def _normalize_prefix(path):
@@ -102,3 +103,26 @@ def health():
 ######################################################################
 #  R E S T   A P I   E N D P O I N T S
 ######################################################################
+
+
+######################################################################
+# UPDATE A RECOMMENDATION
+######################################################################
+@app.route(f"{BASE_PATH}/recommendations/<int:recommendation_id>", methods=["PUT"])
+def update_recommendation(recommendation_id):
+    """Updates a Recommendation by its ID"""
+    app.logger.info("Request to update Recommendation with id: %s", recommendation_id)
+
+    recommendation = Recommendation.find(recommendation_id)
+    if not recommendation:
+        abort(
+            status.HTTP_404_NOT_FOUND,
+            f"Recommendation with id '{recommendation_id}' was not found.",
+        )
+
+    data = request.get_json()
+    recommendation.deserialize(data)
+    recommendation.update()
+
+    app.logger.info("Recommendation with id [%s] updated", recommendation_id)
+    return jsonify(recommendation.serialize()), status.HTTP_200_OK
