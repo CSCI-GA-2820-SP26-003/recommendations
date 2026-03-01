@@ -25,6 +25,7 @@ import logging
 from unittest import TestCase
 from unittest.mock import patch
 from service.common import status
+from tests.factories import RecommendationFactory
 
 
 ######################################################################
@@ -164,4 +165,27 @@ class TestYourResourceService(TestCase):
         self.assertTrue(resp.content_type.startswith("application/json"))
         data = resp.get_json()
         self.assertEqual(data["error"], "Method not Allowed")
+        self.assertIn("message", data)
+
+    def test_get_recommendation(self):
+        """It should read a single recommendation"""
+        client = self._create_test_client()
+        # Create a recommendation in the database
+        rec = RecommendationFactory()
+        rec.create()
+        resp = client.get(f"/api/recommendations/v1/{rec.id}")
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        data = resp.get_json()
+        self.assertEqual(data["id"], rec.id)
+        self.assertEqual(data["product_id"], rec.product_id)
+        self.assertEqual(data["recommended_product_id"], rec.recommended_product_id)
+        self.assertEqual(data["recommendation_type"], rec.recommendation_type)
+
+    def test_get_recommendation_not_found(self):
+        """It should return 404 for a recommendation that doesn't exist"""
+        client = self._create_test_client()
+        resp = client.get("/api/recommendations/v1/0")
+        self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertTrue(resp.content_type.startswith("application/json"))
+        data = resp.get_json()
         self.assertIn("message", data)
