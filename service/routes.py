@@ -22,8 +22,9 @@ and Delete YourResourceModel
 """
 
 import os
-from flask import jsonify
+from flask import jsonify, abort
 from flask import current_app as app  # Import Flask application
+from service.models import Recommendation
 from service.common import status  # HTTP Status Codes
 
 
@@ -102,3 +103,20 @@ def health():
 ######################################################################
 #  R E S T   A P I   E N D P O I N T S
 ######################################################################
+
+
+######################################################################
+# DELETE A RECOMMENDATION
+######################################################################
+@app.route(f"{BASE_PATH}/<int:recommendation_id>", methods=["DELETE"])
+def delete_recommendation(recommendation_id):
+    """Delete a Recommendation by its id"""
+    app.logger.info("DELETE %s/%s", BASE_PATH, recommendation_id)
+    recommendation = Recommendation.find(recommendation_id)
+    if not recommendation:
+        abort(
+            status.HTTP_404_NOT_FOUND,
+            f"Recommendation with id '{recommendation_id}' was not found.",
+        )
+    recommendation.delete()
+    return "", status.HTTP_204_NO_CONTENT
