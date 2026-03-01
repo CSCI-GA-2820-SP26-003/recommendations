@@ -20,15 +20,11 @@ TestYourResourceModel API Service Test Suite
 
 # pylint: disable=duplicate-code
 import os
+import sys
 import logging
 from unittest import TestCase
-from wsgi import app
+from unittest.mock import patch
 from service.common import status
-from service.models import db, YourResourceModel
-
-DATABASE_URI = os.getenv(
-    "DATABASE_URI", "postgresql+psycopg://postgres:postgres@localhost:5432/testdb"
-)
 
 
 ######################################################################
@@ -38,38 +34,104 @@ DATABASE_URI = os.getenv(
 class TestYourResourceService(TestCase):
     """REST API Server Tests"""
 
-    @classmethod
-    def setUpClass(cls):
-        """Run once before all tests"""
+    def _create_test_client(self, env_overrides=None):
+        """Create an app client with temporary ENV/API_PREFIX/API_VERSION values"""
+        test_env = {
+            "ENV": "local",
+            "API_PREFIX": "/api/recommendations",
+            "API_VERSION": "v1",
+        }
+        if env_overrides:
+            test_env.update(env_overrides)
+
+        env_patcher = patch.dict(os.environ, test_env, clear=False)
+        env_patcher.start()
+        self.addCleanup(env_patcher.stop)
+
+        # Fully clear app modules so decorators register on a fresh Flask app
+        for module_name in list(sys.modules):
+            if module_name == "wsgi" or module_name.startswith("service"):
+                sys.modules.pop(module_name, None)
+
+        # pylint: disable=import-outside-toplevel
+        import wsgi
+
+        app = wsgi.app
         app.config["TESTING"] = True
         app.config["DEBUG"] = False
-        # Set up the test database
-        app.config["SQLALCHEMY_DATABASE_URI"] = DATABASE_URI
         app.logger.setLevel(logging.CRITICAL)
-        app.app_context().push()
-
-    @classmethod
-    def tearDownClass(cls):
-        """Run once after all tests"""
-        db.session.close()
-
-    def setUp(self):
-        """Runs before each test"""
-        self.client = app.test_client()
-        db.session.query(YourResourceModel).delete()  # clean up the last tests
-        db.session.commit()
-
-    def tearDown(self):
-        """This runs after each test"""
-        db.session.remove()
+        return app.test_client()
 
     ######################################################################
-    #  P L A C E   T E S T   C A S E S   H E R E
+    #  T E S T   C A S E S
     ######################################################################
 
-    def test_index(self):
-        """It should call the home page"""
-        resp = self.client.get("/")
+    def test_index_returns_json_with_base_path(self):
+        """It should return useful JSON metadata from GET /"""
+        client = self._create_test_client()
+
+        resp = client.get("/")
+
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertTrue(resp.content_type.startswith("application/json"))
+        data = resp.get_json()
+        self.assertEqual(data["service"], "recommendation")
+        self.assertEqual(data["env"], "local")
+        self.assertEqual(data["base_path"], "/api/recommendations/v1")
+        self.assertIn("/api/recommendations/v1/health", data["endpoints"])
 
-    # Todo: Add your test cases here...
+    def test_health_returns_ok_json(self):
+        """It should return HTTP 200 JSON on GET {BASE_PATH}/health"""
+        client = self._create_test_client()
+
+        resp = client.get("/api/recommendations/v1/health")
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertTrue(resp.content_type.startswith("application/json"))
+        data = resp.get_json()
+        self.assertEqual(data["status"], "ok")
+        self.assertEqual(data["service"], "recommendation")
+        self.assertEqual(data["env"], "local")
+        self.assertEqual(data["base_path"], "/api/recommendations/v1")
+
+    def test_env_vars_change_route_base_path(self):
+        """It should build route paths from ENV/API_PREFIX/API_VERSION"""
+        client = self._create_test_client(
+            {
+                "ENV": "staging",
+                "API_PREFIX": "/api/reco",
+                "API_VERSION": "",
+            }
+        )
+
+        resp = client.get("/api/reco/health")
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertTrue(resp.content_type.startswith("application/json"))
+        data = resp.get_json()
+        self.assertEqual(data["env"], "staging")
+        self.assertEqual(data["base_path"], "/api/reco")
+
+    def test_not_found_returns_json(self):
+        """It should return JSON for 404 errors"""
+        client = self._create_test_client()
+
+        resp = client.get("/missing")
+
+        self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertTrue(resp.content_type.startswith("application/json"))
+        data = resp.get_json()
+        self.assertEqual(data["error"], "Not Found")
+        self.assertIn("message", data)
+
+    def test_method_not_allowed_returns_json(self):
+        """It should return JSON for 405 errors"""
+        client = self._create_test_client()
+
+        resp = client.post("/api/recommendations/v1/health")
+
+        self.assertEqual(resp.status_code, status.HTTP_405_METHOD_NOT_ALLOWED)
+        self.assertTrue(resp.content_type.startswith("application/json"))
+        data = resp.get_json()
+        self.assertEqual(data["error"], "Method not Allowed")
+        self.assertIn("message", data)

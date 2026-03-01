@@ -21,10 +21,46 @@ This service implements a REST API that allows you to Create, Read, Update
 and Delete YourResourceModel
 """
 
-from flask import jsonify, request, url_for, abort
+import os
+from flask import jsonify
 from flask import current_app as app  # Import Flask application
-from service.models import YourResourceModel
 from service.common import status  # HTTP Status Codes
+
+
+def _normalize_prefix(path):
+    """Normalize API prefix into a valid leading-slash path"""
+    prefix = (path or "/api/recommendations").strip()
+    if not prefix:
+        prefix = "/api/recommendations"
+    if not prefix.startswith("/"):
+        prefix = f"/{prefix}"
+    normalized = prefix.rstrip("/")
+    return normalized or "/"
+
+
+def _normalize_version(version):
+    """Normalize API version path segment"""
+    return (version or "").strip().strip("/")
+
+
+def _build_base_path():
+    """Compose BASE_PATH from API_PREFIX and API_VERSION"""
+    api_prefix = _normalize_prefix(os.getenv("API_PREFIX", "/api/recommendations"))
+    api_version = _normalize_version(os.getenv("API_VERSION", "v1"))
+    return f"{api_prefix}/{api_version}" if api_version else api_prefix
+
+
+ENV_NAME = os.getenv("ENV", "local")
+BASE_PATH = _build_base_path()
+SERVICE_NAME = "recommendation"
+
+app.logger.info(
+    "Route config: env=%s api_prefix=%s api_version=%s base_path=%s",
+    ENV_NAME,
+    os.getenv("API_PREFIX", "/api/recommendations"),
+    os.getenv("API_VERSION", "v1"),
+    BASE_PATH,
+)
 
 
 ######################################################################
@@ -33,8 +69,32 @@ from service.common import status  # HTTP Status Codes
 @app.route("/")
 def index():
     """Root URL response"""
+    app.logger.info("GET /")
     return (
-        "Reminder: return some useful information in json format about the service here",
+        jsonify(
+            service=SERVICE_NAME,
+            env=ENV_NAME,
+            base_path=BASE_PATH,
+            endpoints=[f"{BASE_PATH}/health"],
+        ),
+        status.HTTP_200_OK,
+    )
+
+
+######################################################################
+# GET HEALTH
+######################################################################
+@app.route(f"{BASE_PATH}/health", methods=["GET"])
+def health():
+    """Health check endpoint"""
+    app.logger.info("GET %s/health", BASE_PATH)
+    return (
+        jsonify(
+            status="ok",
+            service=SERVICE_NAME,
+            env=ENV_NAME,
+            base_path=BASE_PATH,
+        ),
         status.HTTP_200_OK,
     )
 
@@ -42,5 +102,3 @@ def index():
 ######################################################################
 #  R E S T   A P I   E N D P O I N T S
 ######################################################################
-
-# Todo: Place your REST API code here ...
