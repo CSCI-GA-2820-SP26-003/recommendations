@@ -196,6 +196,31 @@ class TestYourResourceService(TestCase):
         self.assertEqual(data["error"], "Method not Allowed")
         self.assertIn("message", data)
 
+    def test_get_recommendation(self):
+        """It should read a single recommendation"""
+        rec = RecommendationFactory()
+        rec.create()
+        resp = app.test_client().get(
+            f"/api/recommendations/v1/recommendations/{rec.id}"
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertTrue(resp.content_type.startswith("application/json"))
+        data = resp.get_json()
+        self.assertEqual(data["id"], rec.id)
+        self.assertEqual(data["product_id"], rec.product_id)
+        self.assertEqual(data["recommended_product_id"], rec.recommended_product_id)
+        self.assertEqual(data["recommendation_type"], rec.recommendation_type)
+
+    def test_get_recommendation_not_found(self):
+        """It should return 404 for a recommendation that doesn't exist"""
+        resp = app.test_client().get(
+            "/api/recommendations/v1/recommendations/0"
+        )
+        self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertTrue(resp.content_type.startswith("application/json"))
+        data = resp.get_json()
+        self.assertIn("message", data)
+
     def test_delete_recommendation(self):
         """It should delete a recommendation"""
         rec = RecommendationFactory()
