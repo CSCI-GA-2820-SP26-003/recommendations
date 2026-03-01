@@ -112,6 +112,36 @@ class TestYourResourceService(TestCase):
         self.assertEqual(data["env"], "staging")
         self.assertEqual(data["base_path"], "/api/reco")
 
+    def test_prefix_without_leading_slash_is_normalized(self):
+        """It should normalize API_PREFIX when leading slash is missing"""
+        client = self._create_test_client(
+            {
+                "API_PREFIX": "api/reco",
+                "API_VERSION": "v2",
+            }
+        )
+
+        resp = client.get("/api/reco/v2/health")
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        data = resp.get_json()
+        self.assertEqual(data["base_path"], "/api/reco/v2")
+
+    def test_blank_prefix_falls_back_to_default(self):
+        """It should fallback to default API_PREFIX when configured value is blank"""
+        client = self._create_test_client(
+            {
+                "API_PREFIX": "   ",
+                "API_VERSION": "v1",
+            }
+        )
+
+        resp = client.get("/api/recommendations/v1/health")
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        data = resp.get_json()
+        self.assertEqual(data["base_path"], "/api/recommendations/v1")
+
     def test_not_found_returns_json(self):
         """It should return JSON for 404 errors"""
         client = self._create_test_client()
