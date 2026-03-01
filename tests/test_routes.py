@@ -24,7 +24,14 @@ import sys
 import logging
 from unittest import TestCase
 from unittest.mock import patch
+from wsgi import app
+from service.models import Recommendation, db
 from service.common import status
+from tests.factories import RecommendationFactory
+
+DATABASE_URI = os.getenv(
+    "DATABASE_URI", "postgresql+psycopg://postgres:postgres@localhost:5432/testdb"
+)
 
 
 ######################################################################
@@ -33,6 +40,29 @@ from service.common import status
 # pylint: disable=too-many-public-methods
 class TestYourResourceService(TestCase):
     """REST API Server Tests"""
+
+    @classmethod
+    def setUpClass(cls):
+        """This runs once before the entire test suite"""
+        app.config["TESTING"] = True
+        app.config["DEBUG"] = False
+        app.config["SQLALCHEMY_DATABASE_URI"] = DATABASE_URI
+        app.logger.setLevel(logging.CRITICAL)
+        app.app_context().push()
+
+    @classmethod
+    def tearDownClass(cls):
+        """This runs once after the entire test suite"""
+        db.session.close()
+
+    def setUp(self):
+        """This runs before each test"""
+        db.session.query(Recommendation).delete()
+        db.session.commit()
+
+    def tearDown(self):
+        """This runs after each test"""
+        db.session.remove()
 
     def _create_test_client(self, env_overrides=None):
         """Create an app client with temporary ENV/API_PREFIX/API_VERSION values"""
@@ -166,13 +196,35 @@ class TestYourResourceService(TestCase):
         self.assertEqual(data["error"], "Method not Allowed")
         self.assertIn("message", data)
 
+    def test_delete_recommendation(self):
+        """It should delete a recommendation"""
+        rec = RecommendationFactory()
+        rec.create()
+        # Verify it exists
+        self.assertIsNotNone(Recommendation.find(rec.id))
+        # Delete it
+        resp = app.test_client().delete(
+            f"/api/recommendations/v1/recommendations/{rec.id}"
+        )
+        self.assertEqual(resp.status_code, status.HTTP_204_NO_CONTENT)
+        self.assertEqual(resp.get_data(as_text=True), "")
+        # Verify it's gone
+        self.assertIsNone(Recommendation.find(rec.id))
+
+    def test_delete_recommendation_not_found(self):
+        """It should return 404 when deleting a non-existent recommendation"""
+        resp = app.test_client().delete(
+            "/api/recommendations/v1/recommendations/0"
+        )
+        self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertTrue(resp.content_type.startswith("application/json"))
+        data = resp.get_json()
+        self.assertIn("message", data)
+
 
 ######################################################################
 #  H E L P E R S
 ######################################################################
-DATABASE_URI = os.getenv(
-    "DATABASE_URI", "postgresql+psycopg://postgres:postgres@localhost:5432/testdb"
-)
 BASE_PATH = "/api/recommendations/v1"
 
 
