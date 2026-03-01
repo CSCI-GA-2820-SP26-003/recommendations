@@ -41,6 +41,29 @@ DATABASE_URI = os.getenv(
 class TestYourResourceService(TestCase):
     """REST API Server Tests"""
 
+    @classmethod
+    def setUpClass(cls):
+        """This runs once before the entire test suite"""
+        app.config["TESTING"] = True
+        app.config["DEBUG"] = False
+        app.config["SQLALCHEMY_DATABASE_URI"] = DATABASE_URI
+        app.logger.setLevel(logging.CRITICAL)
+        app.app_context().push()
+
+    @classmethod
+    def tearDownClass(cls):
+        """This runs once after the entire test suite"""
+        db.session.close()
+
+    def setUp(self):
+        """This runs before each test"""
+        db.session.query(Recommendation).delete()
+        db.session.commit()
+
+    def tearDown(self):
+        """This runs after each test"""
+        db.session.remove()
+
     def _create_test_client(self, env_overrides=None):
         """Create an app client with temporary ENV/API_PREFIX/API_VERSION values"""
         test_env = {
@@ -171,6 +194,28 @@ class TestYourResourceService(TestCase):
         self.assertTrue(resp.content_type.startswith("application/json"))
         data = resp.get_json()
         self.assertEqual(data["error"], "Method not Allowed")
+        self.assertIn("message", data)
+
+    def test_get_recommendation(self):
+        """It should read a single recommendation"""
+        rec = RecommendationFactory()
+        rec.create()
+        resp = app.test_client().get(f"/api/recommendations/v1/{rec.id}")
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertTrue(resp.content_type.startswith("application/json"))
+        data = resp.get_json()
+        self.assertEqual(data["id"], rec.id)
+        self.assertEqual(data["product_id"], rec.product_id)
+        self.assertEqual(data["recommended_product_id"], rec.recommended_product_id)
+        self.assertEqual(data["recommendation_type"], rec.recommendation_type)
+        self.assertEqual(data["score"], rec.score)
+
+    def test_get_recommendation_not_found(self):
+        """It should return 404 for a recommendation that doesn't exist"""
+        resp = app.test_client().get("/api/recommendations/v1/0")
+        self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertTrue(resp.content_type.startswith("application/json"))
+        data = resp.get_json()
         self.assertIn("message", data)
 
 
