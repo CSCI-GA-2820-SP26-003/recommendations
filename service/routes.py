@@ -101,6 +101,19 @@ def health():
 
 
 ######################################################################
+#  UTILITY FUNCTIONS
+######################################################################
+def check_content_type(content_type):
+    """Check that the Content-Type header matches the expected type"""
+    if request.content_type and content_type not in request.content_type:
+        app.logger.error("Invalid Content-Type: %s", request.content_type)
+        abort(
+            status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+            f"Content-Type must be {content_type}",
+        )
+
+
+######################################################################
 #  R E S T   A P I   E N D P O I N T S
 ######################################################################
 
@@ -128,6 +141,7 @@ def get_recommendation(recommendation_id):
 def update_recommendation(recommendation_id):
     """Updates a Recommendation by its ID"""
     app.logger.info("Request to update Recommendation with id: %s", recommendation_id)
+    check_content_type("application/json")
 
     recommendation = Recommendation.find(recommendation_id)
     if not recommendation:

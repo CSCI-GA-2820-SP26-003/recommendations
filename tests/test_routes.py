@@ -327,6 +327,16 @@ class TestUpdateRecommendation(TestCase):
         db.session.expire(recommendation)
         self.assertEqual(recommendation.recommendation_type, original_type)
 
+    def test_update_no_content_type(self):
+        """It should return 415 when Content-Type is not application/json"""
+        recommendation = self._create_recommendation()
+        resp = self.client.put(
+            f"{self.BASE_URL}/{recommendation.id}",
+            data="not json",
+            content_type="text/plain",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_415_UNSUPPORTED_MEDIA_TYPE)
+
     def test_update_recommendation_equal_product_ids(self):
         """It should return 400 when product_id equals recommended_product_id"""
         recommendation = self._create_recommendation()
