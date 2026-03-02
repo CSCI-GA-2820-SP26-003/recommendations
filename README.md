@@ -66,8 +66,57 @@ All endpoints are under the base path `/api/recommendations/v1` by default.
 
 Method | URL | Description
 --- | --- | ---
-GET | / | Returns service name, environment, and base path
-GET | /api/recommendations/v1/health | Health check
+GET | `//` | Returns service name, environment, and base path
+GET | `/api/recommendations/v1/health` | Health check
+
+### Recommendation CRUD Endpoints
+
+Method | URL | Description | Request Body | Response Code
+--- | --- | --- | --- | ---
+POST | `/api/recommendations/v1/recommendations` | Create a recommendation | JSON (see below) | 201 Created
+GET | `/api/recommendations/v1/recommendations` | List all recommendations | None | 200 OK
+GET | `/api/recommendations/v1/recommendations/<id>` | Read a recommendation | None | 200 OK
+PUT | `/api/recommendations/v1/recommendations/<id>` | Update a recommendation | JSON (see below) | 200 OK
+DELETE | `/api/recommendations/v1/recommendations/<id>` | Delete a recommendation | None | 204 No Content
+
+### Create / Update Request Body
+
+```json
+{
+  "product_id": 1,
+  "recommended_product_id": 2,
+  "recommendation_type": "cross_sell",
+  "score": 0.85
+}
+```
+
+- `product_id` (integer, required) - Source product identifier
+- `recommended_product_id` (integer, required) - Recommended product identifier
+- `recommendation_type` (string, required) - One of: `cross_sell`, `up_sell`, `accessory`, `similar_item`
+- `score` (float, optional) - Recommendation score
+
+### Example Response
+
+```json
+{
+  "id": 1,
+  "product_id": 1,
+  "recommended_product_id": 2,
+  "recommendation_type": "cross_sell",
+  "score": 0.85,
+  "created_at": "2026-03-02T12:00:00+00:00"
+}
+```
+
+### List with Pagination
+
+The list endpoint supports optional pagination via the `page` query parameter:
+
+```
+GET /api/recommendations/v1/recommendations?page=1
+```
+
+Returns up to 10 results per page. Omit the `page` parameter to return all results.
 
 ## Recommendation Model
 

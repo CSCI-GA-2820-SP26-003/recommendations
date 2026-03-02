@@ -18,7 +18,7 @@
 TestYourResourceModel API Service Test Suite
 """
 
-# pylint: disable=duplicate-code
+# pylint: disable=duplicate-code,reimported,redefined-outer-name
 import os
 import sys
 import logging
@@ -86,11 +86,11 @@ class TestYourResourceService(TestCase):
         # pylint: disable=import-outside-toplevel
         import wsgi
 
-        app = wsgi.app
-        app.config["TESTING"] = True
-        app.config["DEBUG"] = False
-        app.logger.setLevel(logging.CRITICAL)
-        return app.test_client()
+        test_app = wsgi.app
+        test_app.config["TESTING"] = True
+        test_app.config["DEBUG"] = False
+        test_app.logger.setLevel(logging.CRITICAL)
+        return test_app.test_client()
 
     ######################################################################
     #  T E S T   C A S E S
