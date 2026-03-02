@@ -418,28 +418,26 @@ class TestListRecommendations(TestCase):
 
     @classmethod
     def setUpClass(cls):
-        """This runs once before the entire test suite"""
-        cls.app = _fresh_app()
-        cls.client = cls.app.test_client()
-        cls._ctx = cls.app.app_context()
-        cls._ctx.push()
+        """Run once before all tests"""
+        app.config["TESTING"] = True
+        app.config["DEBUG"] = False
+        app.config["SQLALCHEMY_DATABASE_URI"] = DATABASE_URI
+        app.logger.setLevel(logging.CRITICAL)
+        app.app_context().push()
 
     @classmethod
     def tearDownClass(cls):
-        """This runs once after the entire test suite"""
-        from service.models import db  # pylint: disable=import-outside-toplevel
+        """Run once after all tests"""
         db.session.close()
-        cls._ctx.pop()
 
     def setUp(self):
-        """This runs before each test"""
-        from service.models import db, Recommendation  # pylint: disable=import-outside-toplevel
+        """Run before each test"""
         db.session.query(Recommendation).delete()
         db.session.commit()
+        self.client = app.test_client()
 
     def tearDown(self):
-        """This runs after each test"""
-        from service.models import db  # pylint: disable=import-outside-toplevel
+        """Run after each test"""
         db.session.remove()
 
     # ------------------------------------------------------------------
@@ -455,7 +453,6 @@ class TestListRecommendations(TestCase):
 
     def test_list_all_recommendations(self):
         """It should return all recommendations when no pagination is specified"""
-        from tests.factories import RecommendationFactory  # pylint: disable=import-outside-toplevel
         for _ in range(3):
             RecommendationFactory().create()
         resp = self.client.get(f"{BASE_PATH}/recommendations")
@@ -465,7 +462,6 @@ class TestListRecommendations(TestCase):
 
     def test_list_recommendations_page_1(self):
         """It should return up to 10 records for page=1"""
-        from tests.factories import RecommendationFactory  # pylint: disable=import-outside-toplevel
         for _ in range(15):
             RecommendationFactory().create()
         resp = self.client.get(f"{BASE_PATH}/recommendations?page=1")
@@ -475,7 +471,6 @@ class TestListRecommendations(TestCase):
 
     def test_list_recommendations_page_2(self):
         """It should return remaining records on page 2"""
-        from tests.factories import RecommendationFactory  # pylint: disable=import-outside-toplevel
         for _ in range(15):
             RecommendationFactory().create()
         resp = self.client.get(f"{BASE_PATH}/recommendations?page=2")
