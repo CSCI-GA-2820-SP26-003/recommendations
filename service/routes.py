@@ -164,3 +164,20 @@ def create_recommendation():
     location_url = f"{BASE_PATH}/recommendations/{recommendation.id}"
     app.logger.info("Recommendation with id [%s] created", recommendation.id)
     return jsonify(message), status.HTTP_201_CREATED, {"Location": location_url}
+
+
+######################################################################
+# DELETE A RECOMMENDATION
+######################################################################
+@app.route(f"{BASE_PATH}/recommendations/<int:recommendation_id>", methods=["DELETE"])
+def delete_recommendation(recommendation_id):
+    """Delete a Recommendation by its id"""
+    app.logger.info("DELETE %s/recommendations/%s", BASE_PATH, recommendation_id)
+    recommendation = Recommendation.find(recommendation_id)
+    if not recommendation:
+        abort(
+            status.HTTP_404_NOT_FOUND,
+            f"Recommendation with id '{recommendation_id}' was not found.",
+        )
+    recommendation.delete()
+    return "", status.HTTP_204_NO_CONTENT
