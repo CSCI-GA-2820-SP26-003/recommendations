@@ -167,6 +167,22 @@ def create_recommendation():
 
 
 ######################################################################
+# READ A RECOMMENDATION
+######################################################################
+@app.route(f"{BASE_PATH}/recommendations/<int:recommendation_id>", methods=["GET"])
+def get_recommendation(recommendation_id):
+    """Retrieve a single Recommendation by its id"""
+    app.logger.info("GET %s/recommendations/%s", BASE_PATH, recommendation_id)
+    recommendation = Recommendation.find(recommendation_id)
+    if not recommendation:
+        abort(
+            status.HTTP_404_NOT_FOUND,
+            f"Recommendation with id '{recommendation_id}' was not found.",
+        )
+    return jsonify(recommendation.serialize()), status.HTTP_200_OK
+
+
+######################################################################
 # DELETE A RECOMMENDATION
 ######################################################################
 @app.route(f"{BASE_PATH}/recommendations/<int:recommendation_id>", methods=["DELETE"])
