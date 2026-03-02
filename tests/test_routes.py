@@ -165,3 +165,253 @@ class TestYourResourceService(TestCase):
         data = resp.get_json()
         self.assertEqual(data["error"], "Method not Allowed")
         self.assertIn("message", data)
+
+
+######################################################################
+#  H E L P E R S
+######################################################################
+DATABASE_URI = os.getenv(
+    "DATABASE_URI", "postgresql+psycopg://postgres:postgres@localhost:5432/testdb"
+)
+BASE_PATH = "/api/recommendations/v1"
+
+
+def _fresh_app():
+    """Clear service modules and return a freshly imported app with default env vars."""
+    os.environ.setdefault("API_PREFIX", "/api/recommendations")
+    os.environ.setdefault("API_VERSION", "v1")
+    os.environ.setdefault("ENV", "local")
+    for mod in list(sys.modules):
+        if mod == "wsgi" or mod.startswith("service"):
+            sys.modules.pop(mod, None)
+    import wsgi  # pylint: disable=import-outside-toplevel
+    wsgi.app.config["TESTING"] = True
+    wsgi.app.config["DEBUG"] = False
+    wsgi.app.config["SQLALCHEMY_DATABASE_URI"] = DATABASE_URI
+    wsgi.app.logger.setLevel(logging.CRITICAL)
+    return wsgi.app
+
+
+######################################################################
+#  T E S T   C R E A T E   R E C O M M E N D A T I O N
+######################################################################
+class TestCreateRecommendation(TestCase):
+    """Tests for POST /api/recommendations/v1/recommendations"""
+
+    @classmethod
+    def setUpClass(cls):
+        """This runs once before the entire test suite"""
+        cls.app = _fresh_app()
+        cls.client = cls.app.test_client()
+        cls._ctx = cls.app.app_context()
+        cls._ctx.push()
+
+    @classmethod
+    def tearDownClass(cls):
+        """This runs once after the entire test suite"""
+        from service.models import db  # pylint: disable=import-outside-toplevel
+        db.session.close()
+        cls._ctx.pop()
+
+    def setUp(self):
+        """This runs before each test"""
+        from service.models import db, Recommendation  # pylint: disable=import-outside-toplevel
+        db.session.query(Recommendation).delete()
+        db.session.commit()
+
+    def tearDown(self):
+        """This runs after each test"""
+        from service.models import db  # pylint: disable=import-outside-toplevel
+        db.session.remove()
+
+    # ------------------------------------------------------------------
+    # Happy paths
+    # ------------------------------------------------------------------
+
+    def test_create_recommendation(self):
+        """It should create a new Recommendation and return 201"""
+        payload = {
+            "product_id": 1,
+            "recommended_product_id": 2,
+            "recommendation_type": "cross_sell",
+            "score": 0.85,
+        }
+        resp = self.client.post(
+            f"{BASE_PATH}/recommendations",
+            json=payload,
+            content_type="application/json",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
+        location = resp.headers.get("Location", "")
+        self.assertIn(f"{BASE_PATH}/recommendations/", location)
+        data = resp.get_json()
+        self.assertIsNotNone(data["id"])
+        self.assertEqual(data["product_id"], 1)
+        self.assertEqual(data["recommended_product_id"], 2)
+        self.assertEqual(data["recommendation_type"], "cross_sell")
+        self.assertEqual(data["score"], 0.85)
+
+    def test_create_recommendation_without_score(self):
+        """It should create a Recommendation when score is omitted"""
+        payload = {
+            "product_id": 10,
+            "recommended_product_id": 20,
+            "recommendation_type": "up_sell",
+        }
+        resp = self.client.post(
+            f"{BASE_PATH}/recommendations",
+            json=payload,
+            content_type="application/json",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
+        data = resp.get_json()
+        self.assertIsNone(data["score"])
+
+    # ------------------------------------------------------------------
+    # Sad paths
+    # ------------------------------------------------------------------
+
+    def test_create_recommendation_no_content_type(self):
+        """It should return 415 when Content-Type header is missing"""
+        resp = self.client.post(
+            f"{BASE_PATH}/recommendations",
+            data='{"product_id": 1, "recommended_product_id": 2,'
+                 ' "recommendation_type": "cross_sell"}',
+        )
+        self.assertEqual(resp.status_code, status.HTTP_415_UNSUPPORTED_MEDIA_TYPE)
+
+    def test_create_recommendation_wrong_content_type(self):
+        """It should return 415 when Content-Type is not application/json"""
+        resp = self.client.post(
+            f"{BASE_PATH}/recommendations",
+            data="product_id=1",
+            content_type="text/plain",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_415_UNSUPPORTED_MEDIA_TYPE)
+
+    def test_create_recommendation_missing_field(self):
+        """It should return 400 when a required field is missing"""
+        payload = {
+            "recommended_product_id": 2,
+            "recommendation_type": "cross_sell",
+        }
+        resp = self.client.post(
+            f"{BASE_PATH}/recommendations",
+            json=payload,
+            content_type="application/json",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_create_recommendation_invalid_type(self):
+        """It should return 400 when recommendation_type is not a valid value"""
+        payload = {
+            "product_id": 1,
+            "recommended_product_id": 2,
+            "recommendation_type": "not_a_real_type",
+            "score": 0.5,
+        }
+        resp = self.client.post(
+            f"{BASE_PATH}/recommendations",
+            json=payload,
+            content_type="application/json",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_create_recommendation_same_product_ids(self):
+        """It should return 400 when product_id equals recommended_product_id"""
+        payload = {
+            "product_id": 5,
+            "recommended_product_id": 5,
+            "recommendation_type": "up_sell",
+            "score": 0.5,
+        }
+        resp = self.client.post(
+            f"{BASE_PATH}/recommendations",
+            json=payload,
+            content_type="application/json",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+
+
+######################################################################
+#  T E S T   L I S T   R E C O M M E N D A T I O N S
+######################################################################
+class TestListRecommendations(TestCase):
+    """Tests for GET /api/recommendations/v1/recommendations"""
+
+    @classmethod
+    def setUpClass(cls):
+        """This runs once before the entire test suite"""
+        cls.app = _fresh_app()
+        cls.client = cls.app.test_client()
+        cls._ctx = cls.app.app_context()
+        cls._ctx.push()
+
+    @classmethod
+    def tearDownClass(cls):
+        """This runs once after the entire test suite"""
+        from service.models import db  # pylint: disable=import-outside-toplevel
+        db.session.close()
+        cls._ctx.pop()
+
+    def setUp(self):
+        """This runs before each test"""
+        from service.models import db, Recommendation  # pylint: disable=import-outside-toplevel
+        db.session.query(Recommendation).delete()
+        db.session.commit()
+
+    def tearDown(self):
+        """This runs after each test"""
+        from service.models import db  # pylint: disable=import-outside-toplevel
+        db.session.remove()
+
+    # ------------------------------------------------------------------
+    # Happy paths
+    # ------------------------------------------------------------------
+
+    def test_list_recommendations_empty(self):
+        """It should return an empty list when no recommendations exist"""
+        resp = self.client.get(f"{BASE_PATH}/recommendations")
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertTrue(resp.content_type.startswith("application/json"))
+        self.assertEqual(resp.get_json(), [])
+
+    def test_list_all_recommendations(self):
+        """It should return all recommendations when no pagination is specified"""
+        from tests.factories import RecommendationFactory  # pylint: disable=import-outside-toplevel
+        for _ in range(3):
+            RecommendationFactory().create()
+        resp = self.client.get(f"{BASE_PATH}/recommendations")
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        data = resp.get_json()
+        self.assertEqual(len(data), 3)
+
+    def test_list_recommendations_page_1(self):
+        """It should return up to 10 records for page=1"""
+        from tests.factories import RecommendationFactory  # pylint: disable=import-outside-toplevel
+        for _ in range(15):
+            RecommendationFactory().create()
+        resp = self.client.get(f"{BASE_PATH}/recommendations?page=1")
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        data = resp.get_json()
+        self.assertEqual(len(data), 10)
+
+    def test_list_recommendations_page_2(self):
+        """It should return remaining records on page 2"""
+        from tests.factories import RecommendationFactory  # pylint: disable=import-outside-toplevel
+        for _ in range(15):
+            RecommendationFactory().create()
+        resp = self.client.get(f"{BASE_PATH}/recommendations?page=2")
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        data = resp.get_json()
+        self.assertEqual(len(data), 5)
+
+    # ------------------------------------------------------------------
+    # Sad paths
+    # ------------------------------------------------------------------
+
+    def test_list_recommendations_empty_page(self):
+        """It should return an empty list for a page beyond available data"""
+        resp = self.client.get(f"{BASE_PATH}/recommendations?page=999")
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp.get_json(), [])
