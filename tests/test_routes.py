@@ -492,3 +492,142 @@ class TestListRecommendations(TestCase):
         resp = self.client.get(f"{BASE_PATH}/recommendations?page=999")
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertEqual(resp.get_json(), [])
+
+
+######################################################################
+#  T E S T   U P D A T E   R E C O M M E N D A T I O N
+######################################################################
+class TestUpdateRecommendation(TestCase):
+    """Tests for PUT /api/recommendations/v1/recommendations/<id>"""
+
+    BASE_URL = "/api/recommendations/v1/recommendations"
+
+    @classmethod
+    def setUpClass(cls):
+        """Run once before all tests"""
+        app.config["TESTING"] = True
+        app.config["DEBUG"] = False
+        app.config["SQLALCHEMY_DATABASE_URI"] = DATABASE_URI
+        app.logger.setLevel(logging.CRITICAL)
+        app.app_context().push()
+
+    @classmethod
+    def tearDownClass(cls):
+        """Run once after all tests"""
+        db.session.close()
+
+    def setUp(self):
+        """Run before each test"""
+        db.session.rollback()
+        db.session.query(Recommendation).delete()
+        db.session.commit()
+        self.client = app.test_client()
+
+    def _create_recommendation(self):
+        """Helper to create and persist a recommendation"""
+        recommendation = RecommendationFactory()
+        recommendation.create()
+        return recommendation
+
+    ######################################################################
+    #  H A P P Y   P A T H S
+    ######################################################################
+
+    def test_update_recommendation(self):
+        """It should update an existing recommendation"""
+        recommendation = self._create_recommendation()
+        new_type = (
+            "up_sell"
+            if recommendation.recommendation_type != "up_sell"
+            else "cross_sell"
+        )
+        updated_data = {
+            "product_id": recommendation.product_id,
+            "recommended_product_id": recommendation.recommended_product_id,
+            "recommendation_type": new_type,
+            "score": 0.95,
+        }
+
+        resp = self.client.put(
+            f"{self.BASE_URL}/{recommendation.id}",
+            json=updated_data,
+            content_type="application/json",
+        )
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        data = resp.get_json()
+        self.assertEqual(data["id"], recommendation.id)
+        self.assertEqual(data["recommendation_type"], new_type)
+        self.assertEqual(data["score"], 0.95)
+
+    ######################################################################
+    #  S A D   P A T H S
+    ######################################################################
+
+    def test_update_recommendation_not_found(self):
+        """It should return 404 when updating a non-existent recommendation"""
+        updated_data = {
+            "product_id": 1,
+            "recommended_product_id": 2,
+            "recommendation_type": "up_sell",
+            "score": 0.5,
+        }
+
+        resp = self.client.put(
+            f"{self.BASE_URL}/0",
+            json=updated_data,
+            content_type="application/json",
+        )
+
+        self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
+        data = resp.get_json()
+        self.assertIn("message", data)
+
+    def test_update_recommendation_invalid_type(self):
+        """It should return 400 when updating with an invalid recommendation type"""
+        recommendation = self._create_recommendation()
+        original_type = recommendation.recommendation_type
+        updated_data = {
+            "product_id": recommendation.product_id,
+            "recommended_product_id": recommendation.recommended_product_id,
+            "recommendation_type": "invalid_type",
+            "score": 0.5,
+        }
+
+        resp = self.client.put(
+            f"{self.BASE_URL}/{recommendation.id}",
+            json=updated_data,
+            content_type="application/json",
+        )
+
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        db.session.expire(recommendation)
+        self.assertEqual(recommendation.recommendation_type, original_type)
+
+    def test_update_no_content_type(self):
+        """It should return 415 when Content-Type is not application/json"""
+        recommendation = self._create_recommendation()
+        resp = self.client.put(
+            f"{self.BASE_URL}/{recommendation.id}",
+            data="not json",
+            content_type="text/plain",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_415_UNSUPPORTED_MEDIA_TYPE)
+
+    def test_update_recommendation_equal_product_ids(self):
+        """It should return 400 when product_id equals recommended_product_id"""
+        recommendation = self._create_recommendation()
+        updated_data = {
+            "product_id": 100,
+            "recommended_product_id": 100,
+            "recommendation_type": "up_sell",
+            "score": 0.5,
+        }
+
+        resp = self.client.put(
+            f"{self.BASE_URL}/{recommendation.id}",
+            json=updated_data,
+            content_type="application/json",
+        )
+
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
