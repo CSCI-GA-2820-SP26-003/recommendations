@@ -197,3 +197,27 @@ def delete_recommendation(recommendation_id):
         )
     recommendation.delete()
     return "", status.HTTP_204_NO_CONTENT
+
+
+######################################################################
+# UPDATE A RECOMMENDATION
+######################################################################
+@app.route(f"{BASE_PATH}/recommendations/<int:recommendation_id>", methods=["PUT"])
+def update_recommendation(recommendation_id):
+    """Updates a Recommendation by its ID"""
+    app.logger.info("PUT %s/recommendations/%s", BASE_PATH, recommendation_id)
+    check_content_type("application/json")
+
+    recommendation = Recommendation.find(recommendation_id)
+    if not recommendation:
+        abort(
+            status.HTTP_404_NOT_FOUND,
+            f"Recommendation with id '{recommendation_id}' was not found.",
+        )
+
+    data = request.get_json()
+    recommendation.deserialize(data)
+    recommendation.update()
+
+    app.logger.info("Recommendation with id [%s] updated", recommendation_id)
+    return jsonify(recommendation.serialize()), status.HTTP_200_OK
