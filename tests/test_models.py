@@ -167,6 +167,18 @@ class TestRecommendationModel(TestCase):
         self.assertIn(recommendation_1.id, found_ids)
         self.assertIn(recommendation_2.id, found_ids)
 
+    def test_find_recommendation_by_id(self):
+        """It should find a Recommendation by id and return None when missing"""
+        recommendation = RecommendationFactory(product_id=510, recommended_product_id=610)
+        recommendation.create()
+
+        found = Recommendation.find(recommendation.id)
+        self.assertIsNotNone(found)
+        self.assertEqual(found.id, recommendation.id)
+
+        missing = Recommendation.find(999999)
+        self.assertIsNone(missing)
+
     def test_create_recommendation_type_validation(self):
         """It should reject invalid recommendation_type"""
         recommendation = Recommendation()
