@@ -409,6 +409,30 @@ class TestCreateRecommendation(TestCase):
         )
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
 
+    def test_create_recommendation_malformed_json(self):
+        """It should return 400 when request body contains malformed JSON"""
+        resp = self.client.post(
+            f"{BASE_PATH}/recommendations",
+            data='{"product_id": 1, "recommended_product_id": 2,',
+            content_type="application/json",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertTrue(resp.content_type.startswith("application/json"))
+        data = resp.get_json()
+        self.assertIn("message", data)
+
+    def test_create_recommendation_empty_json_body(self):
+        """It should return 400 when request body is empty JSON payload"""
+        resp = self.client.post(
+            f"{BASE_PATH}/recommendations",
+            data="",
+            content_type="application/json",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertTrue(resp.content_type.startswith("application/json"))
+        data = resp.get_json()
+        self.assertIn("message", data)
+
 
 ######################################################################
 #  T E S T   L I S T   R E C O M M E N D A T I O N S
@@ -626,3 +650,29 @@ class TestUpdateRecommendation(TestCase):
         )
 
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_update_recommendation_malformed_json(self):
+        """It should return 400 when update body contains malformed JSON"""
+        recommendation = self._create_recommendation()
+        resp = self.client.put(
+            f"{self.BASE_URL}/{recommendation.id}",
+            data='{"product_id": 1, "recommended_product_id": 2,',
+            content_type="application/json",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertTrue(resp.content_type.startswith("application/json"))
+        data = resp.get_json()
+        self.assertIn("message", data)
+
+    def test_update_recommendation_empty_json_body(self):
+        """It should return 400 when update body is empty JSON payload"""
+        recommendation = self._create_recommendation()
+        resp = self.client.put(
+            f"{self.BASE_URL}/{recommendation.id}",
+            data="",
+            content_type="application/json",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertTrue(resp.content_type.startswith("application/json"))
+        data = resp.get_json()
+        self.assertIn("message", data)
