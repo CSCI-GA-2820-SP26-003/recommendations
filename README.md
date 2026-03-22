@@ -1,5 +1,7 @@
 # Recommendation Service
 
+[![Build](https://github.com/CSCI-GA-2820-SP26-003/recommendations/actions/workflows/ci.yml/badge.svg)](https://github.com/CSCI-GA-2820-SP26-003/recommendations/actions/workflows/ci.yml)
+[![Codecov](https://codecov.io/gh/CSCI-GA-2820-SP26-003/recommendations/graph/badge.svg)](https://codecov.io/gh/CSCI-GA-2820-SP26-003/recommendations)
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![Python](https://img.shields.io/badge/Language-Python-blue.svg)](https://python.org/)
 
