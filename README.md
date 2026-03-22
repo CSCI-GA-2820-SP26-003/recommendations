@@ -5,6 +5,7 @@
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![Python](https://img.shields.io/badge/Language-Python-blue.svg)](https://python.org/)
 
+
 The Recommendation service is a RESTful API that manages product recommendations for an e-commerce application. It is part of the NYU DevOps course project.
 
 ## Setup
