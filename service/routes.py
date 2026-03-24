@@ -25,7 +25,7 @@ import os
 from flask import abort, jsonify, request
 from flask import current_app as app  # Import Flask application
 from service.common import status  # HTTP Status Codes
-from service.models import Recommendation
+from service.models import Recommendation, DataValidationError
 
 
 def _normalize_prefix(path):
@@ -135,16 +135,43 @@ def check_content_type(content_type):
 ######################################################################
 @app.route(f"{BASE_PATH}/recommendations", methods=["GET"])
 def list_recommendations():
-    """Returns all Recommendations, with optional ?page=N pagination (10 per page)"""
+    """Returns Recommendations, filterable by query string parameters"""
     app.logger.info("GET %s/recommendations", BASE_PATH)
-    page = request.args.get("page", type=int)
-    if page is not None:
-        pagination = Recommendation.query.paginate(
-            page=page, per_page=10, error_out=False
+
+    # Check for query string filters
+    product_id = request.args.get("product_id", type=int)
+    recommended_product_id = request.args.get("recommended_product_id", type=int)
+    recommendation_type = request.args.get("recommendation_type", type=str)
+
+    if product_id is not None:
+        app.logger.info("Filtering by product_id=%s", product_id)
+        recommendations = Recommendation.find_by_product_id(product_id).all()
+    elif recommended_product_id is not None:
+        app.logger.info(
+            "Filtering by recommended_product_id=%s", recommended_product_id
         )
-        recommendations = pagination.items
+        recommendations = Recommendation.find_by_recommended_product_id(
+            recommended_product_id
+        ).all()
+    elif recommendation_type is not None:
+        app.logger.info("Filtering by recommendation_type=%s", recommendation_type)
+        try:
+            recommendations = Recommendation.find_by_recommendation_type(
+                recommendation_type
+            ).all()
+        except DataValidationError as error:
+            abort(status.HTTP_400_BAD_REQUEST, str(error))
     else:
-        recommendations = Recommendation.all()
+        # No filters — use pagination or return all
+        page = request.args.get("page", type=int)
+        if page is not None:
+            pagination = Recommendation.query.paginate(
+                page=page, per_page=10, error_out=False
+            )
+            recommendations = pagination.items
+        else:
+            recommendations = Recommendation.all()
+
     results = [r.serialize() for r in recommendations]
     app.logger.info("Returning %d recommendations", len(results))
     return jsonify(results), status.HTTP_200_OK

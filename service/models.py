@@ -174,3 +174,29 @@ class Recommendation(db.Model):
         """Returns all Recommendations with the given product_id"""
         logger.info("Processing product_id query for %s ...", product_id)
         return cls.query.filter(cls.product_id == product_id)
+
+    @classmethod
+    def find_by_recommended_product_id(cls, recommended_product_id):
+        """Returns all Recommendations with the given recommended_product_id"""
+        logger.info(
+            "Processing recommended_product_id query for %s ...",
+            recommended_product_id,
+        )
+        return cls.query.filter(
+            cls.recommended_product_id == recommended_product_id
+        )
+
+    @classmethod
+    def find_by_recommendation_type(cls, recommendation_type):
+        """Returns all Recommendations with the given recommendation_type"""
+        logger.info(
+            "Processing recommendation_type query for %s ...",
+            recommendation_type,
+        )
+        if recommendation_type not in RECOMMENDATION_TYPES:
+            raise DataValidationError(
+                f"Invalid recommendation_type: {recommendation_type}"
+            )
+        return cls.query.filter(
+            cls.recommendation_type == recommendation_type
+        )
