@@ -172,3 +172,9 @@ class Recommendation(db.Model):
         """Returns all Recommendations with the given product_id"""
         logger.info("Processing product_id query for %s ...", product_id)
         return cls.query.filter(cls.product_id == product_id)
+
+    @classmethod
+    def find_by_type(cls, recommendation_type):
+        """Returns all Recommendations with the given recommendation_type"""
+        logger.info("Processing recommendation_type query for %s ...", recommendation_type)
+        return cls.query.filter(cls.recommendation_type == recommendation_type)

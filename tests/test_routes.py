@@ -512,6 +512,76 @@ class TestListRecommendations(TestCase):
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertEqual(resp.get_json(), [])
 
+    # ------------------------------------------------------------------
+    # Query by attribute
+    # ------------------------------------------------------------------
+
+    def test_query_by_product_id(self):
+        """It should return only recommendations matching the given product_id"""
+        target = RecommendationFactory.build(product_id=9001, recommended_product_id=9002)
+        target.create()
+        other = RecommendationFactory.build(product_id=1111, recommended_product_id=2222)
+        other.create()
+
+        resp = self.client.get(f"{BASE_PATH}/recommendations?product_id=9001")
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        data = resp.get_json()
+        self.assertEqual(len(data), 1)
+        self.assertEqual(data[0]["product_id"], 9001)
+
+    def test_query_by_recommendation_type(self):
+        """It should return only recommendations matching the given recommendation_type"""
+        cross_sell = RecommendationFactory.build(
+            product_id=101, recommended_product_id=201, recommendation_type="cross_sell"
+        )
+        cross_sell.create()
+        up_sell = RecommendationFactory.build(
+            product_id=102, recommended_product_id=202, recommendation_type="up_sell"
+        )
+        up_sell.create()
+        up_sell2 = RecommendationFactory.build(
+            product_id=103, recommended_product_id=203, recommendation_type="up_sell"
+        )
+        up_sell2.create()
+
+        resp = self.client.get(f"{BASE_PATH}/recommendations?recommendation_type=up_sell")
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        data = resp.get_json()
+        self.assertEqual(len(data), 2)
+        for item in data:
+            self.assertEqual(item["recommendation_type"], "up_sell")
+
+    def test_query_by_product_id_no_match(self):
+        """It should return an empty list when no recommendations match the product_id"""
+        RecommendationFactory().create()
+
+        resp = self.client.get(f"{BASE_PATH}/recommendations?product_id=99999")
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp.get_json(), [])
+
+    def test_query_combined_product_id_and_type(self):
+        """It should filter by both product_id and recommendation_type"""
+        match = RecommendationFactory.build(
+            product_id=555, recommended_product_id=666, recommendation_type="accessory"
+        )
+        match.create()
+        no_match_type = RecommendationFactory.build(
+            product_id=555, recommended_product_id=777, recommendation_type="cross_sell"
+        )
+        no_match_type.create()
+        no_match_pid = RecommendationFactory.build(
+            product_id=444, recommended_product_id=888, recommendation_type="accessory"
+        )
+        no_match_pid.create()
+
+        resp = self.client.get(
+            f"{BASE_PATH}/recommendations?product_id=555&recommendation_type=accessory"
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        data = resp.get_json()
+        self.assertEqual(len(data), 1)
+        self.assertEqual(data[0]["product_id"], 555)
+        self.assertEqual(data[0]["recommendation_type"], "accessory")
 
 ######################################################################
 #  T E S T   U P D A T E   R E C O M M E N D A T I O N
