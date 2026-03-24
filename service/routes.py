@@ -80,6 +80,7 @@ def index():
                 f"{BASE_PATH}/health",
                 f"{BASE_PATH}/recommendations",
                 f"{BASE_PATH}/recommendations/{{id}}",
+                f"{BASE_PATH}/recommendations/{{id}}/like",
             ],
         ),
         status.HTTP_200_OK,
@@ -220,4 +221,25 @@ def update_recommendation(recommendation_id):
     recommendation.update()
 
     app.logger.info("Recommendation with id [%s] updated", recommendation_id)
+    return jsonify(recommendation.serialize()), status.HTTP_200_OK
+
+
+######################################################################
+# LIKE A RECOMMENDATION (Action)
+######################################################################
+@app.route(
+    f"{BASE_PATH}/recommendations/<int:recommendation_id>/like", methods=["PUT"]
+)
+def like_recommendation(recommendation_id):
+    """Increments the like count for a Recommendation"""
+    app.logger.info("PUT %s/recommendations/%s/like", BASE_PATH, recommendation_id)
+    recommendation = Recommendation.find(recommendation_id)
+    if not recommendation:
+        abort(
+            status.HTTP_404_NOT_FOUND,
+            f"Recommendation with id '{recommendation_id}' was not found.",
+        )
+    recommendation.like_count += 1
+    recommendation.update()
+    app.logger.info("Recommendation with id [%s] liked", recommendation_id)
     return jsonify(recommendation.serialize()), status.HTTP_200_OK

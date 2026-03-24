@@ -48,6 +48,7 @@ class Recommendation(db.Model):
         nullable=False,
     )
     score = db.Column(db.Float, nullable=True)
+    like_count = db.Column(db.Integer, nullable=False, default=0, server_default="0")
     created_at = db.Column(
         db.DateTime(timezone=True),
         default=lambda: datetime.now(timezone.utc),
@@ -122,6 +123,7 @@ class Recommendation(db.Model):
             "recommended_product_id": self.recommended_product_id,
             "recommendation_type": self.recommendation_type,
             "score": self.score,
+            "like_count": self.like_count,
             "created_at": self.created_at.isoformat() if self.created_at else None,
         }
 

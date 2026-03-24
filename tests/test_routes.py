@@ -676,3 +676,108 @@ class TestUpdateRecommendation(TestCase):
         self.assertTrue(resp.content_type.startswith("application/json"))
         data = resp.get_json()
         self.assertIn("message", data)
+
+
+######################################################################
+#  T E S T   L I K E   R E C O M M E N D A T I O N
+######################################################################
+class TestLikeRecommendation(TestCase):
+    """Tests for PUT /api/recommendations/v1/recommendations/<id>/like"""
+
+    BASE_URL = "/api/recommendations/v1/recommendations"
+
+    @classmethod
+    def setUpClass(cls):
+        """Run once before all tests"""
+        app.config["TESTING"] = True
+        app.config["DEBUG"] = False
+        app.config["SQLALCHEMY_DATABASE_URI"] = DATABASE_URI
+        app.logger.setLevel(logging.CRITICAL)
+        app.app_context().push()
+
+    @classmethod
+    def tearDownClass(cls):
+        """Run once after all tests"""
+        db.session.close()
+
+    def setUp(self):
+        """Run before each test"""
+        db.session.rollback()
+        db.session.query(Recommendation).delete()
+        db.session.commit()
+        self.client = app.test_client()
+
+    def _create_recommendation(self):
+        """Helper to create and persist a recommendation"""
+        recommendation = RecommendationFactory()
+        recommendation.create()
+        return recommendation
+
+    ######################################################################
+    #  H A P P Y   P A T H S
+    ######################################################################
+
+    def test_like_recommendation(self):
+        """It should increment the like count each time"""
+        recommendation = self._create_recommendation()
+        # First like
+        resp = self.client.put(f"{self.BASE_URL}/{recommendation.id}/like")
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        data = resp.get_json()
+        self.assertEqual(data["like_count"], 1)
+        # Second like
+        resp = self.client.put(f"{self.BASE_URL}/{recommendation.id}/like")
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        data = resp.get_json()
+        self.assertEqual(data["like_count"], 2)
+
+    def test_like_count_persists_on_get(self):
+        """It should persist the like count when retrieved via GET"""
+        recommendation = self._create_recommendation()
+        self.client.put(f"{self.BASE_URL}/{recommendation.id}/like")
+        resp = self.client.get(f"{self.BASE_URL}/{recommendation.id}")
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        data = resp.get_json()
+        self.assertEqual(data["like_count"], 1)
+
+    def test_like_count_in_create_response(self):
+        """It should return like_count of 0 when a recommendation is created"""
+        test_data = RecommendationFactory.build().serialize()
+        del test_data["id"]
+        del test_data["created_at"]
+        resp = self.client.post(
+            self.BASE_URL,
+            json=test_data,
+            content_type="application/json",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
+        data = resp.get_json()
+        self.assertEqual(data["like_count"], 0)
+
+    def test_like_count_not_settable_via_update(self):
+        """It should not allow like_count to be changed via PUT update"""
+        recommendation = self._create_recommendation()
+        # Like it once
+        self.client.put(f"{self.BASE_URL}/{recommendation.id}/like")
+        # Try to set like_count via update
+        updated_data = recommendation.serialize()
+        updated_data["like_count"] = 99
+        resp = self.client.put(
+            f"{self.BASE_URL}/{recommendation.id}",
+            json=updated_data,
+            content_type="application/json",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        # Verify like_count was not changed
+        resp = self.client.get(f"{self.BASE_URL}/{recommendation.id}")
+        data = resp.get_json()
+        self.assertEqual(data["like_count"], 1)
+
+    ######################################################################
+    #  S A D   P A T H S
+    ######################################################################
+
+    def test_like_recommendation_not_found(self):
+        """It should return 404 when liking a non-existent recommendation"""
+        resp = self.client.put(f"{self.BASE_URL}/0/like")
+        self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
