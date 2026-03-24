@@ -583,6 +583,7 @@ class TestListRecommendations(TestCase):
         self.assertEqual(data[0]["product_id"], 555)
         self.assertEqual(data[0]["recommendation_type"], "accessory")
 
+
 ######################################################################
 #  T E S T   U P D A T E   R E C O M M E N D A T I O N
 ######################################################################
