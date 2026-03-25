@@ -96,19 +96,15 @@ class TestYourResourceService(TestCase):
     #  T E S T   C A S E S
     ######################################################################
 
-    def test_index_returns_json_with_base_path(self):
-        """It should return useful JSON metadata from GET /"""
+    def test_index_returns_admin_ui(self):
+        """It should return the admin UI HTML page from GET /"""
         client = self._create_test_client()
 
         resp = client.get("/")
 
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
-        self.assertTrue(resp.content_type.startswith("application/json"))
-        data = resp.get_json()
-        self.assertEqual(data["service"], "recommendation")
-        self.assertEqual(data["env"], "local")
-        self.assertEqual(data["base_path"], "/api/recommendations/v1")
-        self.assertIn("/api/recommendations/v1/health", data["endpoints"])
+        self.assertIn("text/html", resp.content_type)
+        self.assertIn(b"Recommendations Admin", resp.data)
 
     def test_health_returns_ok_json(self):
         """It should return HTTP 200 JSON on GET {BASE_PATH}/health"""

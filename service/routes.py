@@ -69,21 +69,9 @@ app.logger.info(
 ######################################################################
 @app.route("/")
 def index():
-    """Root URL response"""
+    """Root URL response — serves the admin UI"""
     app.logger.info("GET /")
-    return (
-        jsonify(
-            service=SERVICE_NAME,
-            env=ENV_NAME,
-            base_path=BASE_PATH,
-            endpoints=[
-                f"{BASE_PATH}/health",
-                f"{BASE_PATH}/recommendations",
-                f"{BASE_PATH}/recommendations/{{id}}",
-            ],
-        ),
-        status.HTTP_200_OK,
-    )
+    return app.send_static_file("index.html")
 
 
 ######################################################################
