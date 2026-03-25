@@ -107,9 +107,9 @@ Scenario: Query Recommendations by Attribute
     And I press the "Create" button
     Then I should see the message "Success"
     When I press the "Clear" button
-    And I set the "search_product_id" to "10"
-    And I select "up_sell" in the "search_recommendation_type" dropdown
-    And I press the "search-btn" button
+    And I set the "Search Product ID" to "10"
+    And I select "up_sell" in the "Search Recommendation Type" dropdown
+    And I press the "Search" button
     Then I should see the message "Success"
     And I should see "1" recommendation in the results
 

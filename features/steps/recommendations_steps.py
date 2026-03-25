@@ -18,6 +18,8 @@ FIELD_ID_MAP = {
     "Recommendation Type": "recommendation_type",
     "Active": "recommendation_active",
     "Score": "recommendation_score",
+    "Search Product ID": "search_product_id",
+    "Search Recommendation Type": "search_recommendation_type",
 }
 
 # Mapping from human-readable button labels to HTML element IDs
@@ -30,6 +32,7 @@ BUTTON_ID_MAP = {
     "Activate": "activate-btn",
     "Deactivate": "deactivate-btn",
     "Clear": "clear-btn",
+    "Search": "search-btn",
 }
 
 

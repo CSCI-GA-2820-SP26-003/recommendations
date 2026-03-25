@@ -104,3 +104,6 @@ ENV/
 .ropeproject
 
 *.pdf
+
+# BDD test output
+*.output
