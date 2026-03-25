@@ -118,11 +118,7 @@ class TestYourResourceService(TestCase):
 
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertTrue(resp.content_type.startswith("application/json"))
-        data = resp.get_json()
-        self.assertEqual(data["status"], "ok")
-        self.assertEqual(data["service"], "recommendation")
-        self.assertEqual(data["env"], "local")
-        self.assertEqual(data["base_path"], "/api/recommendations/v1")
+        self.assertEqual(resp.get_json(), {"status": "OK"})
 
     def test_env_vars_change_route_base_path(self):
         """It should build route paths from ENV/API_PREFIX/API_VERSION"""
@@ -138,9 +134,7 @@ class TestYourResourceService(TestCase):
 
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertTrue(resp.content_type.startswith("application/json"))
-        data = resp.get_json()
-        self.assertEqual(data["env"], "staging")
-        self.assertEqual(data["base_path"], "/api/reco")
+        self.assertEqual(resp.get_json(), {"status": "OK"})
 
     def test_prefix_without_leading_slash_is_normalized(self):
         """It should normalize API_PREFIX when leading slash is missing"""
@@ -154,8 +148,7 @@ class TestYourResourceService(TestCase):
         resp = client.get("/api/reco/v2/health")
 
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
-        data = resp.get_json()
-        self.assertEqual(data["base_path"], "/api/reco/v2")
+        self.assertEqual(resp.get_json(), {"status": "OK"})
 
     def test_blank_prefix_falls_back_to_default(self):
         """It should fallback to default API_PREFIX when configured value is blank"""
@@ -169,8 +162,7 @@ class TestYourResourceService(TestCase):
         resp = client.get("/api/recommendations/v1/health")
 
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
-        data = resp.get_json()
-        self.assertEqual(data["base_path"], "/api/recommendations/v1")
+        self.assertEqual(resp.get_json(), {"status": "OK"})
 
     def test_not_found_returns_json(self):
         """It should return JSON for 404 errors"""

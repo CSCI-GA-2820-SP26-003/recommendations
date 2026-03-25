@@ -94,15 +94,7 @@ def index():
 def health():
     """Health check endpoint"""
     app.logger.info("GET %s/health", BASE_PATH)
-    return (
-        jsonify(
-            status="ok",
-            service=SERVICE_NAME,
-            env=ENV_NAME,
-            base_path=BASE_PATH,
-        ),
-        status.HTTP_200_OK,
-    )
+    return jsonify(status="OK"), status.HTTP_200_OK
 
 
 ######################################################################
