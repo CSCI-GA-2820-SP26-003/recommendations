@@ -138,39 +138,38 @@ def list_recommendations():
     """Returns Recommendations, filterable by query string parameters"""
     app.logger.info("GET %s/recommendations", BASE_PATH)
 
-    # Check for query string filters
     product_id = request.args.get("product_id", type=int)
     recommended_product_id = request.args.get("recommended_product_id", type=int)
     recommendation_type = request.args.get("recommendation_type", type=str)
+    page = request.args.get("page", type=int)
+
+    query = Recommendation.query
 
     if product_id is not None:
         app.logger.info("Filtering by product_id=%s", product_id)
-        recommendations = Recommendation.find_by_product_id(product_id).all()
-    elif recommended_product_id is not None:
+        query = query.filter(Recommendation.product_id == product_id)
+
+    if recommended_product_id is not None:
         app.logger.info(
             "Filtering by recommended_product_id=%s", recommended_product_id
         )
-        recommendations = Recommendation.find_by_recommended_product_id(
-            recommended_product_id
-        ).all()
-    elif recommendation_type is not None:
+        query = query.filter(
+            Recommendation.recommended_product_id == recommended_product_id
+        )
+
+    if recommendation_type is not None:
         app.logger.info("Filtering by recommendation_type=%s", recommendation_type)
         try:
-            recommendations = Recommendation.find_by_recommendation_type(
-                recommendation_type
-            ).all()
+            Recommendation.find_by_recommendation_type(recommendation_type)
         except DataValidationError as error:
             abort(status.HTTP_400_BAD_REQUEST, str(error))
+        query = query.filter(Recommendation.recommendation_type == recommendation_type)
+
+    if page is not None:
+        pagination = query.paginate(page=page, per_page=10, error_out=False)
+        recommendations = pagination.items
     else:
-        # No filters — use pagination or return all
-        page = request.args.get("page", type=int)
-        if page is not None:
-            pagination = Recommendation.query.paginate(
-                page=page, per_page=10, error_out=False
-            )
-            recommendations = pagination.items
-        else:
-            recommendations = Recommendation.all()
+        recommendations = query.all()
 
     results = [r.serialize() for r in recommendations]
     app.logger.info("Returning %d recommendations", len(results))
