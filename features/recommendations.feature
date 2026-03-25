@@ -63,3 +63,19 @@ Scenario: Update a Recommendation
     And I should see "20" in the "Recommended Product ID" field
     And I should see "up_sell" in the "Recommendation Type" dropdown
     And I should see "0.5" in the "Score" field
+
+Scenario: Delete a Recommendation
+    When I set the "Product ID" to "1"
+    And I set the "Recommended Product ID" to "2"
+    And I select "cross_sell" in the "Recommendation Type" dropdown
+    And I set the "Score" to "0.95"
+    And I press the "Create" button
+    Then I should see the message "Success"
+    When I copy the "ID" field
+    And I press the "Clear" button
+    And I paste the "ID" field
+    And I press the "Delete" button
+    Then I should see the message "Recommendation has been Deleted!"
+    When I paste the "ID" field
+    And I press the "Retrieve" button
+    Then I should see the message "Recommendation not found"
