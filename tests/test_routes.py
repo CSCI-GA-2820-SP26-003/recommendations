@@ -18,7 +18,7 @@
 TestYourResourceModel API Service Test Suite
 """
 
-# pylint: disable=duplicate-code,reimported,redefined-outer-name
+# pylint: disable=duplicate-code,reimported,redefined-outer-name,too-many-lines
 import os
 import sys
 import logging
@@ -579,7 +579,6 @@ class TestListRecommendations(TestCase):
             f"{BASE_PATH}/recommendations?recommendation_type=invalid"
         )
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
-
 
 ######################################################################
 #  T E S T   U P D A T E   R E C O M M E N D A T I O N
