@@ -108,6 +108,19 @@ def step_check_field_has_value(context, field):
     )
 
 
+@then('I should see "{count}" recommendation in the results')
+def step_check_results_count(context, count):
+    """Verify the results table has at least the expected number of data rows."""
+    table = WebDriverWait(context.driver, 10).until(
+        EC.presence_of_element_located((By.CSS_SELECTOR, "#search_results table"))
+    )
+    rows = table.find_elements(By.TAG_NAME, "tr")
+    data_rows = [r for r in rows if r.find_elements(By.TAG_NAME, "td")]
+    assert len(data_rows) >= int(count), (
+        f"Expected at least {count} result(s), got {len(data_rows)}"
+    )
+
+
 @when('I copy the "{field}" field')
 def step_copy_field(context, field):
     """Copy the value of a field to the context clipboard."""
