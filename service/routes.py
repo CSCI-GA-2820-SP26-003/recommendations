@@ -25,7 +25,7 @@ import os
 from flask import abort, jsonify, request
 from flask import current_app as app  # Import Flask application
 from service.common import status  # HTTP Status Codes
-from service.models import Recommendation
+from service.models import Recommendation, DataValidationError
 
 
 def _normalize_prefix(path):
@@ -80,6 +80,7 @@ def index():
                 f"{BASE_PATH}/health",
                 f"{BASE_PATH}/recommendations",
                 f"{BASE_PATH}/recommendations/{{id}}",
+                f"{BASE_PATH}/recommendations/{{id}}/like",
             ],
         ),
         status.HTTP_200_OK,
@@ -134,16 +135,34 @@ def check_content_type(content_type):
 ######################################################################
 @app.route(f"{BASE_PATH}/recommendations", methods=["GET"])
 def list_recommendations():
-    """Returns Recommendations filtered by optional query params, with optional ?page=N pagination (10 per page)"""
+    """Returns Recommendations, filterable by query string parameters"""
     app.logger.info("GET %s/recommendations", BASE_PATH)
+
     product_id = request.args.get("product_id", type=int)
-    recommendation_type = request.args.get("recommendation_type")
+    recommended_product_id = request.args.get("recommended_product_id", type=int)
+    recommendation_type = request.args.get("recommendation_type", type=str)
     page = request.args.get("page", type=int)
 
     query = Recommendation.query
+
     if product_id is not None:
+        app.logger.info("Filtering by product_id=%s", product_id)
         query = query.filter(Recommendation.product_id == product_id)
+
+    if recommended_product_id is not None:
+        app.logger.info(
+            "Filtering by recommended_product_id=%s", recommended_product_id
+        )
+        query = query.filter(
+            Recommendation.recommended_product_id == recommended_product_id
+        )
+
     if recommendation_type is not None:
+        app.logger.info("Filtering by recommendation_type=%s", recommendation_type)
+        try:
+            Recommendation.find_by_recommendation_type(recommendation_type)
+        except DataValidationError as error:
+            abort(status.HTTP_400_BAD_REQUEST, str(error))
         query = query.filter(Recommendation.recommendation_type == recommendation_type)
 
     if page is not None:
@@ -151,6 +170,7 @@ def list_recommendations():
         recommendations = pagination.items
     else:
         recommendations = query.all()
+
     results = [r.serialize() for r in recommendations]
     app.logger.info("Returning %d recommendations", len(results))
     return jsonify(results), status.HTTP_200_OK
@@ -227,4 +247,25 @@ def update_recommendation(recommendation_id):
     recommendation.update()
 
     app.logger.info("Recommendation with id [%s] updated", recommendation_id)
+    return jsonify(recommendation.serialize()), status.HTTP_200_OK
+
+
+######################################################################
+# LIKE A RECOMMENDATION (Action)
+######################################################################
+@app.route(
+    f"{BASE_PATH}/recommendations/<int:recommendation_id>/like", methods=["PUT"]
+)
+def like_recommendation(recommendation_id):
+    """Increments the like count for a Recommendation"""
+    app.logger.info("PUT %s/recommendations/%s/like", BASE_PATH, recommendation_id)
+    recommendation = Recommendation.find(recommendation_id)
+    if not recommendation:
+        abort(
+            status.HTTP_404_NOT_FOUND,
+            f"Recommendation with id '{recommendation_id}' was not found.",
+        )
+    recommendation.like_count += 1
+    recommendation.update()
+    app.logger.info("Recommendation with id [%s] liked", recommendation_id)
     return jsonify(recommendation.serialize()), status.HTTP_200_OK

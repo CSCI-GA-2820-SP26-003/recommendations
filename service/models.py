@@ -48,6 +48,7 @@ class Recommendation(db.Model):
         nullable=False,
     )
     score = db.Column(db.Float, nullable=True)
+    like_count = db.Column(db.Integer, nullable=False, default=0, server_default="0")
     created_at = db.Column(
         db.DateTime(timezone=True),
         default=lambda: datetime.now(timezone.utc),
@@ -122,6 +123,7 @@ class Recommendation(db.Model):
             "recommended_product_id": self.recommended_product_id,
             "recommendation_type": self.recommendation_type,
             "score": self.score,
+            "like_count": self.like_count,
             "created_at": self.created_at.isoformat() if self.created_at else None,
         }
 
@@ -174,7 +176,27 @@ class Recommendation(db.Model):
         return cls.query.filter(cls.product_id == product_id)
 
     @classmethod
-    def find_by_type(cls, recommendation_type):
+    def find_by_recommended_product_id(cls, recommended_product_id):
+        """Returns all Recommendations with the given recommended_product_id"""
+        logger.info(
+            "Processing recommended_product_id query for %s ...",
+            recommended_product_id,
+        )
+        return cls.query.filter(
+            cls.recommended_product_id == recommended_product_id
+        )
+
+    @classmethod
+    def find_by_recommendation_type(cls, recommendation_type):
         """Returns all Recommendations with the given recommendation_type"""
-        logger.info("Processing recommendation_type query for %s ...", recommendation_type)
-        return cls.query.filter(cls.recommendation_type == recommendation_type)
+        logger.info(
+            "Processing recommendation_type query for %s ...",
+            recommendation_type,
+        )
+        if recommendation_type not in RECOMMENDATION_TYPES:
+            raise DataValidationError(
+                f"Invalid recommendation_type: {recommendation_type}"
+            )
+        return cls.query.filter(
+            cls.recommendation_type == recommendation_type
+        )

@@ -255,3 +255,75 @@ class TestRecommendationModel(TestCase):
         recommendation.create()
         with patch("service.models.db.session.commit", side_effect=Exception("boom")):
             self.assertRaises(DataValidationError, recommendation.delete)
+
+    ######################################################################
+    #  L I K E   C O U N T   T E S T S
+    ######################################################################
+
+    def test_like_count_default(self):
+        """It should default like_count to 0"""
+        recommendation = RecommendationFactory()
+        recommendation.create()
+        found = Recommendation.find(recommendation.id)
+        self.assertEqual(found.like_count, 0)
+
+    def test_serialize_includes_like_count(self):
+        """It should include like_count in serialized output"""
+        recommendation = RecommendationFactory()
+        recommendation.create()
+        data = recommendation.serialize()
+        self.assertIn("like_count", data)
+        self.assertEqual(data["like_count"], 0)
+
+    def test_deserialize_ignores_like_count(self):
+        """It should not set like_count from deserialized data"""
+        recommendation = RecommendationFactory()
+        recommendation.create()
+        data = recommendation.serialize()
+        data["like_count"] = 99
+        recommendation.deserialize(data)
+        self.assertEqual(recommendation.like_count, 0)
+
+    ######################################################################
+    #  Q U E R Y   M E T H O D   T E S T S
+    ######################################################################
+
+    def test_find_by_recommended_product_id(self):
+        """It should find recommendations by recommended_product_id"""
+        rec1 = RecommendationFactory(
+            product_id=10, recommended_product_id=200
+        )
+        rec1.create()
+        rec2 = RecommendationFactory(
+            product_id=20, recommended_product_id=201
+        )
+        rec2.create()
+        results = Recommendation.find_by_recommended_product_id(200).all()
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0].recommended_product_id, 200)
+
+    def test_find_by_recommendation_type(self):
+        """It should find recommendations by recommendation_type"""
+        rec1 = RecommendationFactory(
+            product_id=10,
+            recommended_product_id=200,
+            recommendation_type="cross_sell",
+        )
+        rec1.create()
+        rec2 = RecommendationFactory(
+            product_id=20,
+            recommended_product_id=201,
+            recommendation_type="up_sell",
+        )
+        rec2.create()
+        results = Recommendation.find_by_recommendation_type("cross_sell").all()
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0].recommendation_type, "cross_sell")
+
+    def test_find_by_recommendation_type_invalid(self):
+        """It should raise DataValidationError for invalid type"""
+        self.assertRaises(
+            DataValidationError,
+            Recommendation.find_by_recommendation_type,
+            "invalid_type",
+        )
