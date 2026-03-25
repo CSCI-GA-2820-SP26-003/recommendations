@@ -102,6 +102,7 @@ class TestRecommendationModel(TestCase):
             data["recommended_product_id"], recommendation.recommended_product_id
         )
         self.assertEqual(data["recommendation_type"], recommendation.recommendation_type)
+        self.assertEqual(data["active"], recommendation.active)
         self.assertEqual(data["score"], recommendation.score)
         self.assertIsNotNone(data["created_at"])
 
@@ -119,6 +120,20 @@ class TestRecommendationModel(TestCase):
         self.assertEqual(recommendation.recommended_product_id, 2)
         self.assertEqual(recommendation.recommendation_type, "cross_sell")
         self.assertEqual(recommendation.score, 0.75)
+        self.assertTrue(recommendation.active)
+
+    def test_deserialize_recommendation_active_false(self):
+        """It should deserialize a Recommendation with active false"""
+        payload = {
+            "product_id": 1,
+            "recommended_product_id": 2,
+            "recommendation_type": "cross_sell",
+            "active": False,
+            "score": 0.75,
+        }
+        recommendation = Recommendation()
+        recommendation.deserialize(payload)
+        self.assertFalse(recommendation.active)
 
     def test_update_recommendation(self):
         """It should update a Recommendation"""
@@ -130,6 +145,14 @@ class TestRecommendationModel(TestCase):
 
         updated = Recommendation.find(recommendation.id)
         self.assertEqual(updated.score, 0.9)
+
+    def test_recommendation_is_active_by_default(self):
+        """It should default new Recommendations to active"""
+        recommendation = RecommendationFactory()
+        recommendation.create()
+
+        found = Recommendation.find(recommendation.id)
+        self.assertTrue(found.active)
 
     def test_delete_recommendation(self):
         """It should delete a Recommendation"""

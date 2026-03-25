@@ -16,6 +16,7 @@ FIELD_ID_MAP = {
     "Product ID": "recommendation_product_id",
     "Recommended Product ID": "recommendation_recommended_product_id",
     "Recommendation Type": "recommendation_type",
+    "Active": "recommendation_active",
     "Score": "recommendation_score",
 }
 
@@ -26,6 +27,8 @@ BUTTON_ID_MAP = {
     "Update": "update-btn",
     "Delete": "delete-btn",
     "List": "list-btn",
+    "Activate": "activate-btn",
+    "Deactivate": "deactivate-btn",
     "Clear": "clear-btn",
 }
 
