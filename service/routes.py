@@ -27,7 +27,6 @@ from flask import current_app as app  # Import Flask application
 from service.common import status  # HTTP Status Codes
 from service.models import (
     Recommendation,
-    DataValidationError,
     RECOMMENDATION_TYPES,
 )
 
