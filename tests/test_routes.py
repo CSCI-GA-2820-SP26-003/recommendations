@@ -206,6 +206,7 @@ class TestYourResourceService(TestCase):
         self.assertEqual(data["product_id"], rec.product_id)
         self.assertEqual(data["recommended_product_id"], rec.recommended_product_id)
         self.assertEqual(data["recommendation_type"], rec.recommendation_type)
+        self.assertTrue(data["active"])
 
     def test_get_recommendation_not_found(self):
         """It should return 404 for a recommendation that doesn't exist"""
@@ -645,6 +646,7 @@ class TestUpdateRecommendation(TestCase):
         data = resp.get_json()
         self.assertEqual(data["id"], recommendation.id)
         self.assertEqual(data["recommendation_type"], new_type)
+        self.assertTrue(data["active"])
         self.assertEqual(data["score"], 0.95)
 
     ######################################################################
@@ -665,6 +667,84 @@ class TestUpdateRecommendation(TestCase):
             json=updated_data,
             content_type="application/json",
         )
+
+        self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
+        data = resp.get_json()
+        self.assertIn("message", data)
+
+
+######################################################################
+#  T E S T   A C T I O N   R E C O M M E N D A T I O N
+######################################################################
+class TestActionRecommendation(TestCase):
+    """Tests for activate/deactivate recommendation actions"""
+
+    BASE_URL = "/api/recommendations/v1/recommendations"
+
+    @classmethod
+    def setUpClass(cls):
+        """Run once before all tests"""
+        app.config["TESTING"] = True
+        app.config["DEBUG"] = False
+        app.config["SQLALCHEMY_DATABASE_URI"] = DATABASE_URI
+        app.logger.setLevel(logging.CRITICAL)
+        app.app_context().push()
+
+    @classmethod
+    def tearDownClass(cls):
+        """Run once after all tests"""
+        db.session.close()
+
+    def setUp(self):
+        """Run before each test"""
+        db.session.rollback()
+        db.session.query(Recommendation).delete()
+        db.session.commit()
+        self.client = app.test_client()
+
+    def _create_recommendation(self):
+        """Helper to create and persist a recommendation"""
+        recommendation = RecommendationFactory()
+        recommendation.create()
+        return recommendation
+
+    def test_deactivate_recommendation(self):
+        """It should deactivate an existing recommendation"""
+        recommendation = RecommendationFactory(active=True)
+        recommendation.create()
+
+        resp = self.client.put(f"{self.BASE_URL}/{recommendation.id}/deactivate")
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        data = resp.get_json()
+        self.assertFalse(data["active"])
+        db.session.expire(recommendation)
+        self.assertFalse(recommendation.active)
+
+    def test_activate_recommendation(self):
+        """It should activate an inactive recommendation"""
+        recommendation = RecommendationFactory(active=False)
+        recommendation.create()
+
+        resp = self.client.put(f"{self.BASE_URL}/{recommendation.id}/activate")
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        data = resp.get_json()
+        self.assertTrue(data["active"])
+        db.session.expire(recommendation)
+        self.assertTrue(recommendation.active)
+
+    def test_deactivate_recommendation_not_found(self):
+        """It should return 404 when deactivating a non-existent recommendation"""
+        resp = self.client.put(f"{self.BASE_URL}/0/deactivate")
+
+        self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
+        data = resp.get_json()
+        self.assertIn("message", data)
+
+    def test_activate_recommendation_not_found(self):
+        """It should return 404 when activating a non-existent recommendation"""
+        resp = self.client.put(f"{self.BASE_URL}/0/activate")
 
         self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
         data = resp.get_json()

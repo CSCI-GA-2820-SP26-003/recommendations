@@ -230,3 +230,48 @@ def update_recommendation(recommendation_id):
 
     app.logger.info("Recommendation with id [%s] updated", recommendation_id)
     return jsonify(recommendation.serialize()), status.HTTP_200_OK
+
+
+######################################################################
+# ACTIVATE A RECOMMENDATION
+######################################################################
+@app.route(
+    f"{BASE_PATH}/recommendations/<int:recommendation_id>/activate", methods=["PUT"]
+)
+def activate_recommendation(recommendation_id):
+    """Marks a Recommendation as active"""
+    app.logger.info("PUT %s/recommendations/%s/activate", BASE_PATH, recommendation_id)
+    recommendation = Recommendation.find(recommendation_id)
+    if not recommendation:
+        abort(
+            status.HTTP_404_NOT_FOUND,
+            f"Recommendation with id '{recommendation_id}' was not found.",
+        )
+    recommendation.active = True
+    recommendation.update()
+    app.logger.info("Recommendation with id [%s] activated", recommendation_id)
+    return jsonify(recommendation.serialize()), status.HTTP_200_OK
+
+
+######################################################################
+# DEACTIVATE A RECOMMENDATION
+######################################################################
+@app.route(
+    f"{BASE_PATH}/recommendations/<int:recommendation_id>/deactivate",
+    methods=["PUT"],
+)
+def deactivate_recommendation(recommendation_id):
+    """Marks a Recommendation as inactive"""
+    app.logger.info(
+        "PUT %s/recommendations/%s/deactivate", BASE_PATH, recommendation_id
+    )
+    recommendation = Recommendation.find(recommendation_id)
+    if not recommendation:
+        abort(
+            status.HTTP_404_NOT_FOUND,
+            f"Recommendation with id '{recommendation_id}' was not found.",
+        )
+    recommendation.active = False
+    recommendation.update()
+    app.logger.info("Recommendation with id [%s] deactivated", recommendation_id)
+    return jsonify(recommendation.serialize()), status.HTTP_200_OK
