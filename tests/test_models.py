@@ -255,3 +255,31 @@ class TestRecommendationModel(TestCase):
         recommendation.create()
         with patch("service.models.db.session.commit", side_effect=Exception("boom")):
             self.assertRaises(DataValidationError, recommendation.delete)
+
+    ######################################################################
+    #  L I K E   C O U N T   T E S T S
+    ######################################################################
+
+    def test_like_count_default(self):
+        """It should default like_count to 0"""
+        recommendation = RecommendationFactory()
+        recommendation.create()
+        found = Recommendation.find(recommendation.id)
+        self.assertEqual(found.like_count, 0)
+
+    def test_serialize_includes_like_count(self):
+        """It should include like_count in serialized output"""
+        recommendation = RecommendationFactory()
+        recommendation.create()
+        data = recommendation.serialize()
+        self.assertIn("like_count", data)
+        self.assertEqual(data["like_count"], 0)
+
+    def test_deserialize_ignores_like_count(self):
+        """It should not set like_count from deserialized data"""
+        recommendation = RecommendationFactory()
+        recommendation.create()
+        data = recommendation.serialize()
+        data["like_count"] = 99
+        recommendation.deserialize(data)
+        self.assertEqual(recommendation.like_count, 0)
