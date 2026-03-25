@@ -174,17 +174,6 @@ class Recommendation(db.Model):
         return cls.query.filter(cls.product_id == product_id)
 
     @classmethod
-    def find_by_recommended_product_id(cls, recommended_product_id):
-        """Returns all Recommendations with the given recommended_product_id"""
-        logger.info(
-            "Processing recommended_product_id query for %s ...",
-            recommended_product_id,
-        )
-        return cls.query.filter(
-            cls.recommended_product_id == recommended_product_id
-        )
-
-    @classmethod
     def find_by_recommendation_type(cls, recommendation_type):
         """Returns all Recommendations with the given recommendation_type"""
         logger.info(

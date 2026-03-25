@@ -129,7 +129,6 @@ def list_recommendations():
     app.logger.info("GET %s/recommendations", BASE_PATH)
 
     product_id = request.args.get("product_id", type=int)
-    recommended_product_id = request.args.get("recommended_product_id", type=int)
     recommendation_type = request.args.get("recommendation_type", type=str)
     page = request.args.get("page", type=int)
 
@@ -138,14 +137,6 @@ def list_recommendations():
     if product_id is not None:
         app.logger.info("Filtering by product_id=%s", product_id)
         query = query.filter(Recommendation.product_id == product_id)
-
-    if recommended_product_id is not None:
-        app.logger.info(
-            "Filtering by recommended_product_id=%s", recommended_product_id
-        )
-        query = query.filter(
-            Recommendation.recommended_product_id == recommended_product_id
-        )
 
     if recommendation_type is not None:
         app.logger.info("Filtering by recommendation_type=%s", recommendation_type)
