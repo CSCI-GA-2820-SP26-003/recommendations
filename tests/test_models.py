@@ -135,6 +135,44 @@ class TestRecommendationModel(TestCase):
         recommendation.deserialize(payload)
         self.assertFalse(recommendation.active)
 
+    def test_deserialize_recommendation_active_string_true(self):
+        """It should deserialize a Recommendation with active string true"""
+        payload = {
+            "product_id": 1,
+            "recommended_product_id": 2,
+            "recommendation_type": "cross_sell",
+            "active": "yes",
+            "score": 0.75,
+        }
+        recommendation = Recommendation()
+        recommendation.deserialize(payload)
+        self.assertTrue(recommendation.active)
+
+    def test_deserialize_recommendation_active_string_false(self):
+        """It should deserialize a Recommendation with active string false"""
+        payload = {
+            "product_id": 1,
+            "recommended_product_id": 2,
+            "recommendation_type": "cross_sell",
+            "active": "off",
+            "score": 0.75,
+        }
+        recommendation = Recommendation()
+        recommendation.deserialize(payload)
+        self.assertFalse(recommendation.active)
+
+    def test_deserialize_recommendation_invalid_active_value(self):
+        """It should reject invalid active values"""
+        payload = {
+            "product_id": 1,
+            "recommended_product_id": 2,
+            "recommendation_type": "cross_sell",
+            "active": "maybe",
+            "score": 0.75,
+        }
+        recommendation = Recommendation()
+        self.assertRaises(DataValidationError, recommendation.deserialize, payload)
+
     def test_update_recommendation(self):
         """It should update a Recommendation"""
         recommendation = RecommendationFactory()
