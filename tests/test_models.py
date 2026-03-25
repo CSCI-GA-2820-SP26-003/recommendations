@@ -149,6 +149,31 @@ class TestRecommendationModel(TestCase):
         self.assertEqual(len(found), 1)
         self.assertEqual(found[0].id, recommendation.id)
 
+    def test_find_by_recommendation_type(self):
+        """It should find Recommendations by recommendation_type"""
+        RecommendationFactory(
+            product_id=610, recommended_product_id=710, recommendation_type="up_sell"
+        ).create()
+        RecommendationFactory(
+            product_id=611, recommended_product_id=711, recommendation_type="cross_sell"
+        ).create()
+        RecommendationFactory(
+            product_id=612, recommended_product_id=712, recommendation_type="up_sell"
+        ).create()
+
+        found = Recommendation.find_by_recommendation_type("up_sell").all()
+        self.assertEqual(len(found), 2)
+        for item in found:
+            self.assertEqual(item.recommendation_type, "up_sell")
+
+    def test_find_by_recommendation_type_rejects_invalid_value(self):
+        """It should reject invalid recommendation_type queries"""
+        self.assertRaises(
+            DataValidationError,
+            Recommendation.find_by_recommendation_type,
+            "invalid_type",
+        )
+
     def test_all_recommendations_empty(self):
         """It should return an empty list when no Recommendations exist"""
         found = Recommendation.all()

@@ -25,7 +25,11 @@ import os
 from flask import abort, jsonify, request
 from flask import current_app as app  # Import Flask application
 from service.common import status  # HTTP Status Codes
-from service.models import Recommendation, DataValidationError
+from service.models import (
+    Recommendation,
+    DataValidationError,
+    RECOMMENDATION_TYPES,
+)
 
 
 def _normalize_prefix(path):
@@ -146,10 +150,11 @@ def list_recommendations():
 
     if recommendation_type is not None:
         app.logger.info("Filtering by recommendation_type=%s", recommendation_type)
-        try:
-            Recommendation.find_by_recommendation_type(recommendation_type)
-        except DataValidationError as error:
-            abort(status.HTTP_400_BAD_REQUEST, str(error))
+        if recommendation_type not in RECOMMENDATION_TYPES:
+            abort(
+                status.HTTP_400_BAD_REQUEST,
+                f"Invalid recommendation_type: {recommendation_type}",
+            )
         query = query.filter(Recommendation.recommendation_type == recommendation_type)
 
     if page is not None:
