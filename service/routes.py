@@ -25,7 +25,10 @@ import os
 from flask import abort, jsonify, request
 from flask import current_app as app  # Import Flask application
 from service.common import status  # HTTP Status Codes
-from service.models import Recommendation
+from service.models import (
+    Recommendation,
+    RECOMMENDATION_TYPES,
+)
 
 
 def _normalize_prefix(path):
@@ -122,16 +125,34 @@ def check_content_type(content_type):
 ######################################################################
 @app.route(f"{BASE_PATH}/recommendations", methods=["GET"])
 def list_recommendations():
-    """Returns all Recommendations, with optional ?page=N pagination (10 per page)"""
+    """Returns Recommendations, filterable by query string parameters"""
     app.logger.info("GET %s/recommendations", BASE_PATH)
+
+    product_id = request.args.get("product_id", type=int)
+    recommendation_type = request.args.get("recommendation_type", type=str)
     page = request.args.get("page", type=int)
+
+    query = Recommendation.query
+
+    if product_id is not None:
+        app.logger.info("Filtering by product_id=%s", product_id)
+        query = query.filter(Recommendation.product_id == product_id)
+
+    if recommendation_type is not None:
+        app.logger.info("Filtering by recommendation_type=%s", recommendation_type)
+        if recommendation_type not in RECOMMENDATION_TYPES:
+            abort(
+                status.HTTP_400_BAD_REQUEST,
+                f"Invalid recommendation_type: {recommendation_type}",
+            )
+        query = query.filter(Recommendation.recommendation_type == recommendation_type)
+
     if page is not None:
-        pagination = Recommendation.query.paginate(
-            page=page, per_page=10, error_out=False
-        )
+        pagination = query.paginate(page=page, per_page=10, error_out=False)
         recommendations = pagination.items
     else:
-        recommendations = Recommendation.all()
+        recommendations = query.all()
+
     results = [r.serialize() for r in recommendations]
     app.logger.info("Returning %d recommendations", len(results))
     return jsonify(results), status.HTTP_200_OK

@@ -508,6 +508,78 @@ class TestListRecommendations(TestCase):
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertEqual(resp.get_json(), [])
 
+    # ------------------------------------------------------------------
+    # Query by attribute
+    # ------------------------------------------------------------------
+
+    def test_query_by_product_id(self):
+        """It should return only recommendations matching the given product_id"""
+        target = RecommendationFactory.build(
+            product_id=9001, recommended_product_id=9002
+        )
+        target.create()
+        RecommendationFactory.build(
+            product_id=1111, recommended_product_id=2222
+        ).create()
+
+        resp = self.client.get(f"{BASE_PATH}/recommendations?product_id=9001")
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        data = resp.get_json()
+        self.assertEqual(len(data), 1)
+        self.assertEqual(data[0]["product_id"], 9001)
+
+    def test_query_by_recommendation_type(self):
+        """It should return only recommendations matching the recommendation_type"""
+        RecommendationFactory.build(
+            product_id=101, recommended_product_id=201, recommendation_type="cross_sell"
+        ).create()
+        RecommendationFactory.build(
+            product_id=102, recommended_product_id=202, recommendation_type="up_sell"
+        ).create()
+        RecommendationFactory.build(
+            product_id=103, recommended_product_id=203, recommendation_type="up_sell"
+        ).create()
+
+        resp = self.client.get(
+            f"{BASE_PATH}/recommendations?recommendation_type=up_sell"
+        )
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        data = resp.get_json()
+        self.assertEqual(len(data), 2)
+        for item in data:
+            self.assertEqual(item["recommendation_type"], "up_sell")
+
+    def test_query_combined_product_id_and_type(self):
+        """It should filter recommendations by both product_id and type"""
+        RecommendationFactory.build(
+            product_id=555, recommended_product_id=666, recommendation_type="accessory"
+        ).create()
+        RecommendationFactory.build(
+            product_id=555, recommended_product_id=777, recommendation_type="cross_sell"
+        ).create()
+        RecommendationFactory.build(
+            product_id=444, recommended_product_id=888, recommendation_type="accessory"
+        ).create()
+
+        resp = self.client.get(
+            f"{BASE_PATH}/recommendations?product_id=555&recommendation_type=accessory"
+        )
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        data = resp.get_json()
+        self.assertEqual(len(data), 1)
+        self.assertEqual(data[0]["product_id"], 555)
+        self.assertEqual(data[0]["recommendation_type"], "accessory")
+
+    def test_query_by_invalid_recommendation_type(self):
+        """It should return 400 for an invalid recommendation_type"""
+        resp = self.client.get(
+            f"{BASE_PATH}/recommendations?recommendation_type=invalid"
+        )
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+
 
 ######################################################################
 #  T E S T   U P D A T E   R E C O M M E N D A T I O N

@@ -91,3 +91,24 @@ Scenario: List all Recommendations
     And I press the "List" button
     Then I should see the message "Success"
     And I should see "1" recommendation in the results
+
+Scenario: Query Recommendations by Attribute
+    When I set the "Product ID" to "1"
+    And I set the "Recommended Product ID" to "2"
+    And I select "cross_sell" in the "Recommendation Type" dropdown
+    And I set the "Score" to "0.95"
+    And I press the "Create" button
+    Then I should see the message "Success"
+    When I press the "Clear" button
+    And I set the "Product ID" to "10"
+    And I set the "Recommended Product ID" to "20"
+    And I select "up_sell" in the "Recommendation Type" dropdown
+    And I set the "Score" to "0.50"
+    And I press the "Create" button
+    Then I should see the message "Success"
+    When I press the "Clear" button
+    And I set the "search_product_id" to "10"
+    And I select "up_sell" in the "search_recommendation_type" dropdown
+    And I press the "search-btn" button
+    Then I should see the message "Success"
+    And I should see "1" recommendation in the results

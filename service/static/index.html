@@ -69,6 +69,26 @@
             <button id="clear-btn" class="btn" onclick="clearForm()">Clear</button>
         </div>
 
+        <h2>Search Recommendations</h2>
+
+        <div class="form-group">
+            <label for="search_product_id">Search Product ID</label>
+            <input type="number" id="search_product_id" placeholder="Filter by product ID">
+        </div>
+        <div class="form-group">
+            <label for="search_recommendation_type">Search Recommendation Type</label>
+            <select id="search_recommendation_type">
+                <option value="">-- Any Type --</option>
+                <option value="cross_sell">cross_sell</option>
+                <option value="up_sell">up_sell</option>
+                <option value="accessory">accessory</option>
+                <option value="similar_item">similar_item</option>
+            </select>
+        </div>
+        <div>
+            <button id="search-btn" class="btn btn-info" onclick="searchRecommendations()">Search</button>
+        </div>
+
         <div id="search_results"></div>
     </div>
 
@@ -95,6 +115,8 @@
             document.getElementById("recommendation_recommended_product_id").value = "";
             document.getElementById("recommendation_type").value = "";
             document.getElementById("recommendation_score").value = "";
+            document.getElementById("search_product_id").value = "";
+            document.getElementById("search_recommendation_type").value = "";
             document.getElementById("search_results").innerHTML = "";
             clearFlash();
         }
@@ -118,6 +140,31 @@
                 data.score = parseFloat(score);
             }
             return data;
+        }
+
+        function renderResults(results) {
+            let html = "<table><tr><th>ID</th><th>Product ID</th><th>Recommended Product ID</th><th>Type</th><th>Score</th></tr>";
+            results.forEach(r => {
+                html += `<tr><td>${r.id}</td><td>${r.product_id}</td><td>${r.recommended_product_id}</td><td>${r.recommendation_type}</td><td>${r.score != null ? r.score : ""}</td></tr>`;
+            });
+            html += "</table>";
+            document.getElementById("search_results").innerHTML = html;
+        }
+
+        function getSearchQuery() {
+            const params = new URLSearchParams();
+            const productId = document.getElementById("search_product_id").value;
+            const recommendationType = document.getElementById("search_recommendation_type").value;
+
+            if (productId !== "") {
+                params.set("product_id", productId);
+            }
+            if (recommendationType !== "") {
+                params.set("recommendation_type", recommendationType);
+            }
+
+            const query = params.toString();
+            return query ? `${BASE_URL}?${query}` : BASE_URL;
         }
 
         async function createRecommendation() {
@@ -214,12 +261,23 @@
                     return;
                 }
                 const results = await resp.json();
-                let html = "<table><tr><th>ID</th><th>Product ID</th><th>Recommended Product ID</th><th>Type</th><th>Score</th></tr>";
-                results.forEach(r => {
-                    html += `<tr><td>${r.id}</td><td>${r.product_id}</td><td>${r.recommended_product_id}</td><td>${r.recommendation_type}</td><td>${r.score != null ? r.score : ''}</td></tr>`;
-                });
-                html += "</table>";
-                document.getElementById("search_results").innerHTML = html;
+                renderResults(results);
+                flash("Success", "success");
+            } catch (e) {
+                flash("Error: " + e.message, "error");
+            }
+        }
+
+        async function searchRecommendations() {
+            try {
+                const resp = await fetch(getSearchQuery());
+                if (!resp.ok) {
+                    const err = await resp.json();
+                    flash("Error: " + (err.message || "Could not search recommendations"), "error");
+                    return;
+                }
+                const results = await resp.json();
+                renderResults(results);
                 flash("Success", "success");
             } catch (e) {
                 flash("Error: " + e.message, "error");
