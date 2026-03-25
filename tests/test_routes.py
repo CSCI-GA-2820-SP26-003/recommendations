@@ -580,6 +580,7 @@ class TestListRecommendations(TestCase):
         )
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
 
+
 ######################################################################
 #  T E S T   U P D A T E   R E C O M M E N D A T I O N
 ######################################################################
