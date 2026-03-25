@@ -20,5 +20,6 @@ class RecommendationFactory(factory.Factory):
     product_id = factory.Sequence(lambda n: n + 100)
     recommended_product_id = factory.Sequence(lambda n: n + 200)
     recommendation_type = factory.Iterator(RECOMMENDATION_TYPES)
+    active = True
     score = factory.LazyFunction(lambda: round(random.uniform(0.0, 1.0), 2))
     like_count = 0

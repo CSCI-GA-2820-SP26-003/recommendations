@@ -18,7 +18,7 @@
 TestYourResourceModel API Service Test Suite
 """
 
-# pylint: disable=duplicate-code,reimported,redefined-outer-name
+# pylint: disable=duplicate-code,reimported,redefined-outer-name,too-many-lines
 import os
 import sys
 import logging
@@ -96,19 +96,15 @@ class TestYourResourceService(TestCase):
     #  T E S T   C A S E S
     ######################################################################
 
-    def test_index_returns_json_with_base_path(self):
-        """It should return useful JSON metadata from GET /"""
+    def test_index_returns_admin_ui(self):
+        """It should return the admin UI HTML page from GET /"""
         client = self._create_test_client()
 
         resp = client.get("/")
 
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
-        self.assertTrue(resp.content_type.startswith("application/json"))
-        data = resp.get_json()
-        self.assertEqual(data["service"], "recommendation")
-        self.assertEqual(data["env"], "local")
-        self.assertEqual(data["base_path"], "/api/recommendations/v1")
-        self.assertIn("/api/recommendations/v1/health", data["endpoints"])
+        self.assertIn("text/html", resp.content_type)
+        self.assertIn(b"Recommendations Admin", resp.data)
 
     def test_health_returns_ok_json(self):
         """It should return HTTP 200 JSON on GET {BASE_PATH}/health"""
@@ -202,6 +198,7 @@ class TestYourResourceService(TestCase):
         self.assertEqual(data["product_id"], rec.product_id)
         self.assertEqual(data["recommended_product_id"], rec.recommended_product_id)
         self.assertEqual(data["recommendation_type"], rec.recommendation_type)
+        self.assertTrue(data["active"])
 
     def test_get_recommendation_not_found(self):
         """It should return 404 for a recommendation that doesn't exist"""
@@ -510,33 +507,37 @@ class TestListRecommendations(TestCase):
 
     def test_query_by_product_id(self):
         """It should return only recommendations matching the given product_id"""
-        target = RecommendationFactory.build(product_id=9001, recommended_product_id=9002)
+        target = RecommendationFactory.build(
+            product_id=9001, recommended_product_id=9002
+        )
         target.create()
-        other = RecommendationFactory.build(product_id=1111, recommended_product_id=2222)
-        other.create()
+        RecommendationFactory.build(
+            product_id=1111, recommended_product_id=2222
+        ).create()
 
         resp = self.client.get(f"{BASE_PATH}/recommendations?product_id=9001")
+
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         data = resp.get_json()
         self.assertEqual(len(data), 1)
         self.assertEqual(data[0]["product_id"], 9001)
 
     def test_query_by_recommendation_type(self):
-        """It should return only recommendations matching the given recommendation_type"""
-        cross_sell = RecommendationFactory.build(
+        """It should return only recommendations matching the recommendation_type"""
+        RecommendationFactory.build(
             product_id=101, recommended_product_id=201, recommendation_type="cross_sell"
-        )
-        cross_sell.create()
-        up_sell = RecommendationFactory.build(
+        ).create()
+        RecommendationFactory.build(
             product_id=102, recommended_product_id=202, recommendation_type="up_sell"
-        )
-        up_sell.create()
-        up_sell2 = RecommendationFactory.build(
+        ).create()
+        RecommendationFactory.build(
             product_id=103, recommended_product_id=203, recommendation_type="up_sell"
-        )
-        up_sell2.create()
+        ).create()
 
-        resp = self.client.get(f"{BASE_PATH}/recommendations?recommendation_type=up_sell")
+        resp = self.client.get(
+            f"{BASE_PATH}/recommendations?recommendation_type=up_sell"
+        )
+
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         data = resp.get_json()
         self.assertEqual(len(data), 2)
@@ -552,19 +553,16 @@ class TestListRecommendations(TestCase):
         self.assertEqual(resp.get_json(), [])
 
     def test_query_combined_product_id_and_type(self):
-        """It should filter by both product_id and recommendation_type"""
-        match = RecommendationFactory.build(
+        """It should filter recommendations by both product_id and type"""
+        RecommendationFactory.build(
             product_id=555, recommended_product_id=666, recommendation_type="accessory"
-        )
-        match.create()
-        no_match_type = RecommendationFactory.build(
+        ).create()
+        RecommendationFactory.build(
             product_id=555, recommended_product_id=777, recommendation_type="cross_sell"
-        )
-        no_match_type.create()
-        no_match_pid = RecommendationFactory.build(
+        ).create()
+        RecommendationFactory.build(
             product_id=444, recommended_product_id=888, recommendation_type="accessory"
-        )
-        no_match_pid.create()
+        ).create()
 
         resp = self.client.get(
             f"{BASE_PATH}/recommendations?product_id=555&recommendation_type=accessory"
@@ -574,6 +572,13 @@ class TestListRecommendations(TestCase):
         self.assertEqual(len(data), 1)
         self.assertEqual(data[0]["product_id"], 555)
         self.assertEqual(data[0]["recommendation_type"], "accessory")
+
+    def test_query_by_invalid_recommendation_type(self):
+        """It should return 400 for an invalid recommendation_type"""
+        resp = self.client.get(
+            f"{BASE_PATH}/recommendations?recommendation_type=invalid"
+        )
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
 
 
 ######################################################################
@@ -640,6 +645,7 @@ class TestUpdateRecommendation(TestCase):
         data = resp.get_json()
         self.assertEqual(data["id"], recommendation.id)
         self.assertEqual(data["recommendation_type"], new_type)
+        self.assertTrue(data["active"])
         self.assertEqual(data["score"], 0.95)
 
     ######################################################################
@@ -660,6 +666,84 @@ class TestUpdateRecommendation(TestCase):
             json=updated_data,
             content_type="application/json",
         )
+
+        self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
+        data = resp.get_json()
+        self.assertIn("message", data)
+
+
+######################################################################
+#  T E S T   A C T I O N   R E C O M M E N D A T I O N
+######################################################################
+class TestActionRecommendation(TestCase):
+    """Tests for activate/deactivate recommendation actions"""
+
+    BASE_URL = "/api/recommendations/v1/recommendations"
+
+    @classmethod
+    def setUpClass(cls):
+        """Run once before all tests"""
+        app.config["TESTING"] = True
+        app.config["DEBUG"] = False
+        app.config["SQLALCHEMY_DATABASE_URI"] = DATABASE_URI
+        app.logger.setLevel(logging.CRITICAL)
+        app.app_context().push()
+
+    @classmethod
+    def tearDownClass(cls):
+        """Run once after all tests"""
+        db.session.close()
+
+    def setUp(self):
+        """Run before each test"""
+        db.session.rollback()
+        db.session.query(Recommendation).delete()
+        db.session.commit()
+        self.client = app.test_client()
+
+    def _create_recommendation(self):
+        """Helper to create and persist a recommendation"""
+        recommendation = RecommendationFactory()
+        recommendation.create()
+        return recommendation
+
+    def test_deactivate_recommendation(self):
+        """It should deactivate an existing recommendation"""
+        recommendation = RecommendationFactory(active=True)
+        recommendation.create()
+
+        resp = self.client.put(f"{self.BASE_URL}/{recommendation.id}/deactivate")
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        data = resp.get_json()
+        self.assertFalse(data["active"])
+        db.session.expire(recommendation)
+        self.assertFalse(recommendation.active)
+
+    def test_activate_recommendation(self):
+        """It should activate an inactive recommendation"""
+        recommendation = RecommendationFactory(active=False)
+        recommendation.create()
+
+        resp = self.client.put(f"{self.BASE_URL}/{recommendation.id}/activate")
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        data = resp.get_json()
+        self.assertTrue(data["active"])
+        db.session.expire(recommendation)
+        self.assertTrue(recommendation.active)
+
+    def test_deactivate_recommendation_not_found(self):
+        """It should return 404 when deactivating a non-existent recommendation"""
+        resp = self.client.put(f"{self.BASE_URL}/0/deactivate")
+
+        self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
+        data = resp.get_json()
+        self.assertIn("message", data)
+
+    def test_activate_recommendation_not_found(self):
+        """It should return 404 when activating a non-existent recommendation"""
+        resp = self.client.put(f"{self.BASE_URL}/0/activate")
 
         self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
         data = resp.get_json()

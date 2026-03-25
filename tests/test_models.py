@@ -102,6 +102,7 @@ class TestRecommendationModel(TestCase):
             data["recommended_product_id"], recommendation.recommended_product_id
         )
         self.assertEqual(data["recommendation_type"], recommendation.recommendation_type)
+        self.assertEqual(data["active"], recommendation.active)
         self.assertEqual(data["score"], recommendation.score)
         self.assertIsNotNone(data["created_at"])
 
@@ -119,6 +120,58 @@ class TestRecommendationModel(TestCase):
         self.assertEqual(recommendation.recommended_product_id, 2)
         self.assertEqual(recommendation.recommendation_type, "cross_sell")
         self.assertEqual(recommendation.score, 0.75)
+        self.assertTrue(recommendation.active)
+
+    def test_deserialize_recommendation_active_false(self):
+        """It should deserialize a Recommendation with active false"""
+        payload = {
+            "product_id": 1,
+            "recommended_product_id": 2,
+            "recommendation_type": "cross_sell",
+            "active": False,
+            "score": 0.75,
+        }
+        recommendation = Recommendation()
+        recommendation.deserialize(payload)
+        self.assertFalse(recommendation.active)
+
+    def test_deserialize_recommendation_active_string_true(self):
+        """It should deserialize a Recommendation with active string true"""
+        payload = {
+            "product_id": 1,
+            "recommended_product_id": 2,
+            "recommendation_type": "cross_sell",
+            "active": "yes",
+            "score": 0.75,
+        }
+        recommendation = Recommendation()
+        recommendation.deserialize(payload)
+        self.assertTrue(recommendation.active)
+
+    def test_deserialize_recommendation_active_string_false(self):
+        """It should deserialize a Recommendation with active string false"""
+        payload = {
+            "product_id": 1,
+            "recommended_product_id": 2,
+            "recommendation_type": "cross_sell",
+            "active": "off",
+            "score": 0.75,
+        }
+        recommendation = Recommendation()
+        recommendation.deserialize(payload)
+        self.assertFalse(recommendation.active)
+
+    def test_deserialize_recommendation_invalid_active_value(self):
+        """It should reject invalid active values"""
+        payload = {
+            "product_id": 1,
+            "recommended_product_id": 2,
+            "recommendation_type": "cross_sell",
+            "active": "maybe",
+            "score": 0.75,
+        }
+        recommendation = Recommendation()
+        self.assertRaises(DataValidationError, recommendation.deserialize, payload)
 
     def test_update_recommendation(self):
         """It should update a Recommendation"""
@@ -130,6 +183,14 @@ class TestRecommendationModel(TestCase):
 
         updated = Recommendation.find(recommendation.id)
         self.assertEqual(updated.score, 0.9)
+
+    def test_recommendation_is_active_by_default(self):
+        """It should default new Recommendations to active"""
+        recommendation = RecommendationFactory()
+        recommendation.create()
+
+        found = Recommendation.find(recommendation.id)
+        self.assertTrue(found.active)
 
     def test_delete_recommendation(self):
         """It should delete a Recommendation"""
@@ -148,6 +209,31 @@ class TestRecommendationModel(TestCase):
         found = Recommendation.find_by_product_id(500).all()
         self.assertEqual(len(found), 1)
         self.assertEqual(found[0].id, recommendation.id)
+
+    def test_find_by_recommendation_type(self):
+        """It should find Recommendations by recommendation_type"""
+        RecommendationFactory(
+            product_id=610, recommended_product_id=710, recommendation_type="up_sell"
+        ).create()
+        RecommendationFactory(
+            product_id=611, recommended_product_id=711, recommendation_type="cross_sell"
+        ).create()
+        RecommendationFactory(
+            product_id=612, recommended_product_id=712, recommendation_type="up_sell"
+        ).create()
+
+        found = Recommendation.find_by_recommendation_type("up_sell").all()
+        self.assertEqual(len(found), 2)
+        for item in found:
+            self.assertEqual(item.recommendation_type, "up_sell")
+
+    def test_find_by_recommendation_type_rejects_invalid_value(self):
+        """It should reject invalid recommendation_type queries"""
+        self.assertRaises(
+            DataValidationError,
+            Recommendation.find_by_recommendation_type,
+            "invalid_type",
+        )
 
     def test_all_recommendations_empty(self):
         """It should return an empty list when no Recommendations exist"""
@@ -302,8 +388,8 @@ class TestRecommendationModel(TestCase):
         self.assertEqual(len(results), 1)
         self.assertEqual(results[0].recommended_product_id, 200)
 
-    def test_find_by_recommendation_type(self):
-        """It should find recommendations by recommendation_type"""
+    def test_find_by_recommendation_type_query_method(self):
+        """It should find recommendations by recommendation_type query method"""
         rec1 = RecommendationFactory(
             product_id=10,
             recommended_product_id=200,

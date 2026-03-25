@@ -25,7 +25,7 @@ import os
 from flask import abort, jsonify, request
 from flask import current_app as app  # Import Flask application
 from service.common import status  # HTTP Status Codes
-from service.models import Recommendation, DataValidationError
+from service.models import Recommendation, RECOMMENDATION_TYPES
 
 
 def _normalize_prefix(path):
@@ -69,22 +69,9 @@ app.logger.info(
 ######################################################################
 @app.route("/")
 def index():
-    """Root URL response"""
+    """Root URL response — serves the admin UI"""
     app.logger.info("GET /")
-    return (
-        jsonify(
-            service=SERVICE_NAME,
-            env=ENV_NAME,
-            base_path=BASE_PATH,
-            endpoints=[
-                f"{BASE_PATH}/health",
-                f"{BASE_PATH}/recommendations",
-                f"{BASE_PATH}/recommendations/{{id}}",
-                f"{BASE_PATH}/recommendations/{{id}}/like",
-            ],
-        ),
-        status.HTTP_200_OK,
-    )
+    return app.send_static_file("index.html")
 
 
 ######################################################################
@@ -151,10 +138,11 @@ def list_recommendations():
 
     if recommendation_type is not None:
         app.logger.info("Filtering by recommendation_type=%s", recommendation_type)
-        try:
-            Recommendation.find_by_recommendation_type(recommendation_type)
-        except DataValidationError as error:
-            abort(status.HTTP_400_BAD_REQUEST, str(error))
+        if recommendation_type not in RECOMMENDATION_TYPES:
+            abort(
+                status.HTTP_400_BAD_REQUEST,
+                f"Invalid recommendation_type: {recommendation_type}",
+            )
         query = query.filter(Recommendation.recommendation_type == recommendation_type)
 
     if page is not None:
@@ -239,6 +227,51 @@ def update_recommendation(recommendation_id):
     recommendation.update()
 
     app.logger.info("Recommendation with id [%s] updated", recommendation_id)
+    return jsonify(recommendation.serialize()), status.HTTP_200_OK
+
+
+######################################################################
+# ACTIVATE A RECOMMENDATION
+######################################################################
+@app.route(
+    f"{BASE_PATH}/recommendations/<int:recommendation_id>/activate", methods=["PUT"]
+)
+def activate_recommendation(recommendation_id):
+    """Marks a Recommendation as active"""
+    app.logger.info("PUT %s/recommendations/%s/activate", BASE_PATH, recommendation_id)
+    recommendation = Recommendation.find(recommendation_id)
+    if not recommendation:
+        abort(
+            status.HTTP_404_NOT_FOUND,
+            f"Recommendation with id '{recommendation_id}' was not found.",
+        )
+    recommendation.active = True
+    recommendation.update()
+    app.logger.info("Recommendation with id [%s] activated", recommendation_id)
+    return jsonify(recommendation.serialize()), status.HTTP_200_OK
+
+
+######################################################################
+# DEACTIVATE A RECOMMENDATION
+######################################################################
+@app.route(
+    f"{BASE_PATH}/recommendations/<int:recommendation_id>/deactivate",
+    methods=["PUT"],
+)
+def deactivate_recommendation(recommendation_id):
+    """Marks a Recommendation as inactive"""
+    app.logger.info(
+        "PUT %s/recommendations/%s/deactivate", BASE_PATH, recommendation_id
+    )
+    recommendation = Recommendation.find(recommendation_id)
+    if not recommendation:
+        abort(
+            status.HTTP_404_NOT_FOUND,
+            f"Recommendation with id '{recommendation_id}' was not found.",
+        )
+    recommendation.active = False
+    recommendation.update()
+    app.logger.info("Recommendation with id [%s] deactivated", recommendation_id)
     return jsonify(recommendation.serialize()), status.HTTP_200_OK
 
 

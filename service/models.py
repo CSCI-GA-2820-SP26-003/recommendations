@@ -47,6 +47,7 @@ class Recommendation(db.Model):
         SAEnum(*RECOMMENDATION_TYPES, name="recommendation_type"),
         nullable=False,
     )
+    active = db.Column(db.Boolean, nullable=False, default=True)
     score = db.Column(db.Float, nullable=True)
     like_count = db.Column(db.Integer, nullable=False, default=0, server_default="0")
     created_at = db.Column(
@@ -122,6 +123,7 @@ class Recommendation(db.Model):
             "product_id": self.product_id,
             "recommended_product_id": self.recommended_product_id,
             "recommendation_type": self.recommendation_type,
+            "active": self.active,
             "score": self.score,
             "like_count": self.like_count,
             "created_at": self.created_at.isoformat() if self.created_at else None,
@@ -138,6 +140,7 @@ class Recommendation(db.Model):
             self.product_id = int(data["product_id"])
             self.recommended_product_id = int(data["recommended_product_id"])
             self.recommendation_type = str(data["recommendation_type"])
+            self.active = self._coerce_bool(data.get("active", True))
             self.score = float(data["score"]) if data.get("score") is not None else None
             self._validate()
         except AttributeError as error:
@@ -152,6 +155,19 @@ class Recommendation(db.Model):
                 + str(error)
             ) from error
         return self
+
+    @staticmethod
+    def _coerce_bool(value):
+        """Converts supported values into a boolean"""
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, str):
+            normalized = value.strip().lower()
+            if normalized in ("true", "1", "yes", "on"):
+                return True
+            if normalized in ("false", "0", "no", "off"):
+                return False
+        raise ValueError(f"Invalid boolean value: {value}")
 
     ##################################################
     # CLASS METHODS
