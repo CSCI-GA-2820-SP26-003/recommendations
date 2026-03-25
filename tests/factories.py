@@ -22,3 +22,4 @@ class RecommendationFactory(factory.Factory):
     recommendation_type = factory.Iterator(RECOMMENDATION_TYPES)
     active = True
     score = factory.LazyFunction(lambda: round(random.uniform(0.0, 1.0), 2))
+    like_count = 0

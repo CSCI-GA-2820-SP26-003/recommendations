@@ -49,6 +49,7 @@ class Recommendation(db.Model):
     )
     active = db.Column(db.Boolean, nullable=False, default=True)
     score = db.Column(db.Float, nullable=True)
+    like_count = db.Column(db.Integer, nullable=False, default=0, server_default="0")
     created_at = db.Column(
         db.DateTime(timezone=True),
         default=lambda: datetime.now(timezone.utc),
@@ -124,6 +125,7 @@ class Recommendation(db.Model):
             "recommendation_type": self.recommendation_type,
             "active": self.active,
             "score": self.score,
+            "like_count": self.like_count,
             "created_at": self.created_at.isoformat() if self.created_at else None,
         }
 
@@ -188,6 +190,17 @@ class Recommendation(db.Model):
         """Returns all Recommendations with the given product_id"""
         logger.info("Processing product_id query for %s ...", product_id)
         return cls.query.filter(cls.product_id == product_id)
+
+    @classmethod
+    def find_by_recommended_product_id(cls, recommended_product_id):
+        """Returns all Recommendations with the given recommended_product_id"""
+        logger.info(
+            "Processing recommended_product_id query for %s ...",
+            recommended_product_id,
+        )
+        return cls.query.filter(
+            cls.recommended_product_id == recommended_product_id
+        )
 
     @classmethod
     def find_by_recommendation_type(cls, recommendation_type):

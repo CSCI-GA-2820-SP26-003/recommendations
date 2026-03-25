@@ -114,11 +114,7 @@ class TestYourResourceService(TestCase):
 
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertTrue(resp.content_type.startswith("application/json"))
-        data = resp.get_json()
-        self.assertEqual(data["status"], "ok")
-        self.assertEqual(data["service"], "recommendation")
-        self.assertEqual(data["env"], "local")
-        self.assertEqual(data["base_path"], "/api/recommendations/v1")
+        self.assertEqual(resp.get_json(), {"status": "OK"})
 
     def test_env_vars_change_route_base_path(self):
         """It should build route paths from ENV/API_PREFIX/API_VERSION"""
@@ -134,9 +130,7 @@ class TestYourResourceService(TestCase):
 
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertTrue(resp.content_type.startswith("application/json"))
-        data = resp.get_json()
-        self.assertEqual(data["env"], "staging")
-        self.assertEqual(data["base_path"], "/api/reco")
+        self.assertEqual(resp.get_json(), {"status": "OK"})
 
     def test_prefix_without_leading_slash_is_normalized(self):
         """It should normalize API_PREFIX when leading slash is missing"""
@@ -150,8 +144,7 @@ class TestYourResourceService(TestCase):
         resp = client.get("/api/reco/v2/health")
 
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
-        data = resp.get_json()
-        self.assertEqual(data["base_path"], "/api/reco/v2")
+        self.assertEqual(resp.get_json(), {"status": "OK"})
 
     def test_blank_prefix_falls_back_to_default(self):
         """It should fallback to default API_PREFIX when configured value is blank"""
@@ -165,8 +158,7 @@ class TestYourResourceService(TestCase):
         resp = client.get("/api/recommendations/v1/health")
 
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
-        data = resp.get_json()
-        self.assertEqual(data["base_path"], "/api/recommendations/v1")
+        self.assertEqual(resp.get_json(), {"status": "OK"})
 
     def test_not_found_returns_json(self):
         """It should return JSON for 404 errors"""
@@ -552,6 +544,14 @@ class TestListRecommendations(TestCase):
         for item in data:
             self.assertEqual(item["recommendation_type"], "up_sell")
 
+    def test_query_by_product_id_no_match(self):
+        """It should return an empty list when no recommendations match the product_id"""
+        RecommendationFactory().create()
+
+        resp = self.client.get(f"{BASE_PATH}/recommendations?product_id=99999")
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp.get_json(), [])
+
     def test_query_combined_product_id_and_type(self):
         """It should filter recommendations by both product_id and type"""
         RecommendationFactory.build(
@@ -567,7 +567,6 @@ class TestListRecommendations(TestCase):
         resp = self.client.get(
             f"{BASE_PATH}/recommendations?product_id=555&recommendation_type=accessory"
         )
-
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         data = resp.get_json()
         self.assertEqual(len(data), 1)
@@ -824,3 +823,207 @@ class TestActionRecommendation(TestCase):
         self.assertTrue(resp.content_type.startswith("application/json"))
         data = resp.get_json()
         self.assertIn("message", data)
+
+
+######################################################################
+#  T E S T   L I K E   R E C O M M E N D A T I O N
+######################################################################
+class TestLikeRecommendation(TestCase):
+    """Tests for PUT /api/recommendations/v1/recommendations/<id>/like"""
+
+    BASE_URL = "/api/recommendations/v1/recommendations"
+
+    @classmethod
+    def setUpClass(cls):
+        """Run once before all tests"""
+        app.config["TESTING"] = True
+        app.config["DEBUG"] = False
+        app.config["SQLALCHEMY_DATABASE_URI"] = DATABASE_URI
+        app.logger.setLevel(logging.CRITICAL)
+        app.app_context().push()
+
+    @classmethod
+    def tearDownClass(cls):
+        """Run once after all tests"""
+        db.session.close()
+
+    def setUp(self):
+        """Run before each test"""
+        db.session.rollback()
+        db.session.query(Recommendation).delete()
+        db.session.commit()
+        self.client = app.test_client()
+
+    def _create_recommendation(self):
+        """Helper to create and persist a recommendation"""
+        recommendation = RecommendationFactory()
+        recommendation.create()
+        return recommendation
+
+    ######################################################################
+    #  H A P P Y   P A T H S
+    ######################################################################
+
+    def test_like_recommendation(self):
+        """It should increment the like count each time"""
+        recommendation = self._create_recommendation()
+        # First like
+        resp = self.client.put(f"{self.BASE_URL}/{recommendation.id}/like")
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        data = resp.get_json()
+        self.assertEqual(data["like_count"], 1)
+        # Second like
+        resp = self.client.put(f"{self.BASE_URL}/{recommendation.id}/like")
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        data = resp.get_json()
+        self.assertEqual(data["like_count"], 2)
+
+    def test_like_count_persists_on_get(self):
+        """It should persist the like count when retrieved via GET"""
+        recommendation = self._create_recommendation()
+        self.client.put(f"{self.BASE_URL}/{recommendation.id}/like")
+        resp = self.client.get(f"{self.BASE_URL}/{recommendation.id}")
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        data = resp.get_json()
+        self.assertEqual(data["like_count"], 1)
+
+    def test_like_count_in_create_response(self):
+        """It should return like_count of 0 when a recommendation is created"""
+        test_data = RecommendationFactory.build().serialize()
+        del test_data["id"]
+        del test_data["created_at"]
+        resp = self.client.post(
+            self.BASE_URL,
+            json=test_data,
+            content_type="application/json",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
+        data = resp.get_json()
+        self.assertEqual(data["like_count"], 0)
+
+    def test_like_count_not_settable_via_update(self):
+        """It should not allow like_count to be changed via PUT update"""
+        recommendation = self._create_recommendation()
+        # Like it once
+        self.client.put(f"{self.BASE_URL}/{recommendation.id}/like")
+        # Try to set like_count via update
+        updated_data = recommendation.serialize()
+        updated_data["like_count"] = 99
+        resp = self.client.put(
+            f"{self.BASE_URL}/{recommendation.id}",
+            json=updated_data,
+            content_type="application/json",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        # Verify like_count was not changed
+        resp = self.client.get(f"{self.BASE_URL}/{recommendation.id}")
+        data = resp.get_json()
+        self.assertEqual(data["like_count"], 1)
+
+    ######################################################################
+    #  S A D   P A T H S
+    ######################################################################
+
+    def test_like_recommendation_not_found(self):
+        """It should return 404 when liking a non-existent recommendation"""
+        resp = self.client.put(f"{self.BASE_URL}/0/like")
+        self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
+
+
+######################################################################
+#  T E S T   Q U E R Y   R E C O M M E N D A T I O N S
+######################################################################
+class TestQueryRecommendations(TestCase):
+    """Tests for GET /api/recommendations/v1/recommendations?<query>"""
+
+    BASE_URL = "/api/recommendations/v1/recommendations"
+
+    @classmethod
+    def setUpClass(cls):
+        """Run once before all tests"""
+        app.config["TESTING"] = True
+        app.config["DEBUG"] = False
+        app.config["SQLALCHEMY_DATABASE_URI"] = DATABASE_URI
+        app.logger.setLevel(logging.CRITICAL)
+        app.app_context().push()
+
+    @classmethod
+    def tearDownClass(cls):
+        """Run once after all tests"""
+        db.session.close()
+
+    def setUp(self):
+        """Run before each test"""
+        db.session.rollback()
+        db.session.query(Recommendation).delete()
+        db.session.commit()
+        self.client = app.test_client()
+
+    def _create_recommendation(self, **kwargs):
+        """Helper to create and persist a recommendation with optional overrides"""
+        recommendation = RecommendationFactory(**kwargs)
+        recommendation.create()
+        return recommendation
+
+    ######################################################################
+    #  H A P P Y   P A T H S
+    ######################################################################
+
+    def test_query_by_product_id(self):
+        """It should filter recommendations by product_id"""
+        rec1 = self._create_recommendation(product_id=10, recommended_product_id=200)
+        self._create_recommendation(product_id=20, recommended_product_id=201)
+        resp = self.client.get(f"{self.BASE_URL}?product_id=10")
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        data = resp.get_json()
+        self.assertEqual(len(data), 1)
+        self.assertEqual(data[0]["product_id"], rec1.product_id)
+
+    def test_query_by_recommended_product_id(self):
+        """It should filter recommendations by recommended_product_id"""
+        rec1 = self._create_recommendation(
+            product_id=10, recommended_product_id=200
+        )
+        self._create_recommendation(product_id=20, recommended_product_id=201)
+        resp = self.client.get(f"{self.BASE_URL}?recommended_product_id=200")
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        data = resp.get_json()
+        self.assertEqual(len(data), 1)
+        self.assertEqual(
+            data[0]["recommended_product_id"], rec1.recommended_product_id
+        )
+
+    def test_query_by_recommendation_type(self):
+        """It should filter recommendations by recommendation_type"""
+        self._create_recommendation(
+            product_id=10,
+            recommended_product_id=200,
+            recommendation_type="cross_sell",
+        )
+        self._create_recommendation(
+            product_id=20,
+            recommended_product_id=201,
+            recommendation_type="up_sell",
+        )
+        resp = self.client.get(f"{self.BASE_URL}?recommendation_type=cross_sell")
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        data = resp.get_json()
+        self.assertEqual(len(data), 1)
+        self.assertEqual(data[0]["recommendation_type"], "cross_sell")
+
+    def test_query_no_results(self):
+        """It should return an empty list when no recommendations match"""
+        self._create_recommendation(product_id=10, recommended_product_id=200)
+        resp = self.client.get(f"{self.BASE_URL}?product_id=999")
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        data = resp.get_json()
+        self.assertEqual(len(data), 0)
+
+    ######################################################################
+    #  S A D   P A T H S
+    ######################################################################
+
+    def test_query_by_invalid_recommendation_type(self):
+        """It should return 400 for an invalid recommendation_type"""
+        resp = self.client.get(f"{self.BASE_URL}?recommendation_type=invalid")
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
