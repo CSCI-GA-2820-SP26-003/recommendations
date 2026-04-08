@@ -39,16 +39,10 @@ def create_app():
     db.init_app(app)
 
     with app.app_context():
-        # Import routes and models after Flask app is created
+        # Dependencies require we import the routes AFTER the Flask app is created
         # pylint: disable=wrong-import-position, wrong-import-order, unused-import
         from service import routes, models  # noqa: F401 E402
-        from service.common import cli_commands  # noqa: F401, E402
-
-        # Initialize Flask-RESTX (registers all namespaces and routes)
-        routes.api.init_app(app)
-
-        # Register the HTML web UI at /
-        routes.init_index_route(app)
+        from service.common import error_handlers, cli_commands  # noqa: F401, E402
 
         try:
             db.create_all()

@@ -5,7 +5,6 @@ name = "pypi"
 
 [packages]
 flask = "==3.1.2"
-flask-restx = "*"
 flask-sqlalchemy = "==3.1.1"
 psycopg = {extras = ["binary"], version = "==3.3.2"}
 retry2 = "==0.9.5"
