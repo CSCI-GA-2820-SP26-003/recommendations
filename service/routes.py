@@ -23,7 +23,7 @@ automatic Swagger/OpenAPI documentation at /apidocs.
 
 import os
 from flask import abort, jsonify, request
-from flask_restx import Api, Namespace, Resource, fields
+from flask_restx import Api, Resource, fields
 from werkzeug.exceptions import (
     BadRequest,
     NotFound,
