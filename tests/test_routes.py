@@ -24,6 +24,7 @@ import sys
 import logging
 from unittest import TestCase
 from unittest.mock import patch
+from werkzeug.exceptions import Conflict
 from wsgi import app
 from service.models import Recommendation, db
 from service.common import status
@@ -182,6 +183,51 @@ class TestYourResourceService(TestCase):
         self.assertTrue(resp.content_type.startswith("application/json"))
         data = resp.get_json()
         self.assertEqual(data["error"], "Method not Allowed")
+        self.assertIn("message", data)
+
+    def test_unsupported_media_type_returns_json(self):
+        """It should return JSON for 415 errors"""
+        resp = app.test_client().post(
+            f"{BASE_PATH}/recommendations",
+            data="not json",
+            content_type="text/plain",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_415_UNSUPPORTED_MEDIA_TYPE)
+        self.assertTrue(resp.content_type.startswith("application/json"))
+        data = resp.get_json()
+        self.assertEqual(data["error"], "Unsupported media type")
+        self.assertIn("message", data)
+
+    def test_conflict_returns_json(self):
+        """It should return JSON for 409 Conflict errors"""
+        # Mock Recommendation.find to raise a Conflict error
+        with patch(
+            "service.routes.Recommendation.find",
+            side_effect=Conflict("Resource conflict"),
+        ):
+            resp = app.test_client().get(
+                f"{BASE_PATH}/recommendations/1"
+            )
+        self.assertEqual(resp.status_code, status.HTTP_409_CONFLICT)
+        self.assertTrue(resp.content_type.startswith("application/json"))
+        data = resp.get_json()
+        self.assertEqual(data["error"], "Conflict")
+        self.assertIn("message", data)
+
+    def test_bad_request_returns_json(self):
+        """It should return JSON for 400 errors with proper structure"""
+        payload = {
+            "recommended_product_id": 2,
+            "recommendation_type": "cross_sell",
+        }
+        resp = app.test_client().post(
+            f"{BASE_PATH}/recommendations",
+            json=payload,
+            content_type="application/json",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertTrue(resp.content_type.startswith("application/json"))
+        data = resp.get_json()
         self.assertIn("message", data)
 
     def test_get_recommendation(self):
