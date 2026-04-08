@@ -19,7 +19,7 @@ This module creates and configures the Flask app and sets up the logging
 and SQL database
 """
 import sys
-from flask import Flask
+from flask import Flask, jsonify
 from service import config
 from service.common import log_handlers
 
@@ -49,6 +49,25 @@ def create_app():
 
         # Register the HTML web UI at /
         routes.init_index_route(app)
+
+        # App-level error handlers for routes outside Flask-RESTX
+        @app.errorhandler(404)
+        def not_found(error):  # pylint: disable=unused-variable
+            """Return JSON for 404 errors"""
+            return jsonify(
+                status=404,
+                error="Not Found",
+                message=str(error),
+            ), 404
+
+        @app.errorhandler(405)
+        def method_not_allowed(error):  # pylint: disable=unused-variable
+            """Return JSON for 405 errors"""
+            return jsonify(
+                status=405,
+                error="Method not Allowed",
+                message=str(error),
+            ), 405
 
         try:
             db.create_all()

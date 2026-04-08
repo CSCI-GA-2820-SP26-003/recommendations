@@ -151,9 +151,9 @@
         }
 
         function renderResults(results) {
-            let html = "<table><tr><th>ID</th><th>Product ID</th><th>Recommended Product ID</th><th>Type</th><th>Score</th></tr>";
+            let html = "<table><tr><th>ID</th><th>Product ID</th><th>Recommended Product ID</th><th>Type</th><th>Active</th><th>Score</th><th>Likes</th></tr>";
             results.forEach(r => {
-                html += `<tr><td>${r.id}</td><td>${r.product_id}</td><td>${r.recommended_product_id}</td><td>${r.recommendation_type}</td><td>${r.score != null ? r.score : ""}</td></tr>`;
+                html += `<tr><td>${r.id}</td><td>${r.product_id}</td><td>${r.recommended_product_id}</td><td>${r.recommendation_type}</td><td>${r.active != null ? String(r.active) : ""}</td><td>${r.score != null ? r.score : ""}</td><td>${r.like_count != null ? r.like_count : 0}</td></tr>`;
             });
             html += "</table>";
             document.getElementById("search_results").innerHTML = html;

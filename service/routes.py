@@ -22,7 +22,7 @@ automatic Swagger/OpenAPI documentation at /apidocs.
 """
 
 import os
-from flask import abort, jsonify, request
+from flask import abort, request
 from flask_restx import Api, Resource, fields
 from werkzeug.exceptions import (
     BadRequest,
@@ -271,7 +271,7 @@ class HealthCheck(Resource):
     @health_ns.response(200, "Service is healthy")
     def get(self):
         """Returns service health status"""
-        return jsonify(status="OK")
+        return {"status": "OK"}
 
 
 ######################################################################
@@ -324,7 +324,7 @@ class RecommendationList(Resource):
             recommendations = query.all()
 
         results = [r.serialize() for r in recommendations]
-        return jsonify(results)
+        return results
 
     @ns.doc("create_recommendation")
     @ns.expect(create_model, validate=False)
@@ -339,7 +339,7 @@ class RecommendationList(Resource):
         recommendation.create()
         message = recommendation.serialize()
         location_url = f"{BASE_PATH}/recommendations/{recommendation.id}"
-        return jsonify(message), status.HTTP_201_CREATED, {"Location": location_url}
+        return message, status.HTTP_201_CREATED, {"Location": location_url}
 
 
 ######################################################################
@@ -361,7 +361,7 @@ class RecommendationResource(Resource):
                 status.HTTP_404_NOT_FOUND,
                 f"Recommendation with id '{recommendation_id}' was not found.",
             )
-        return jsonify(recommendation.serialize())
+        return recommendation.serialize()
 
     @ns.doc("update_recommendation")
     @ns.expect(create_model, validate=False)
@@ -380,7 +380,7 @@ class RecommendationResource(Resource):
             )
         recommendation.deserialize(request.get_json())
         recommendation.update()
-        return jsonify(recommendation.serialize())
+        return recommendation.serialize()
 
     @ns.doc("delete_recommendation")
     @ns.response(204, "Recommendation deleted")
@@ -418,7 +418,7 @@ class RecommendationActivate(Resource):
             )
         recommendation.active = True
         recommendation.update()
-        return jsonify(recommendation.serialize())
+        return recommendation.serialize()
 
 
 ######################################################################
@@ -442,7 +442,7 @@ class RecommendationDeactivate(Resource):
             )
         recommendation.active = False
         recommendation.update()
-        return jsonify(recommendation.serialize())
+        return recommendation.serialize()
 
 
 ######################################################################
@@ -466,7 +466,7 @@ class RecommendationLike(Resource):
             )
         recommendation.like_count += 1
         recommendation.update()
-        return jsonify(recommendation.serialize())
+        return recommendation.serialize()
 
 
 ######################################################################
