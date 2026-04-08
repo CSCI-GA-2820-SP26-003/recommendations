@@ -127,6 +127,17 @@ def step_check_results_count(context, count):
     )
 
 
+@then('I should see "{value}" in the results')
+def step_check_value_in_results(context, value):
+    """Verify that a value appears somewhere in the search results table."""
+    table = WebDriverWait(context.driver, 10).until(
+        EC.presence_of_element_located((By.CSS_SELECTOR, "#search_results table"))
+    )
+    assert value in table.text, (
+        f"Expected '{value}' in results table, but it was not found"
+    )
+
+
 @when('I copy the "{field}" field')
 def step_copy_field(context, field):
     """Copy the value of a field to the context clipboard."""
