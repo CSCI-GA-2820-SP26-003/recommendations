@@ -27,6 +27,7 @@ from flask_restx import Api, Resource, fields
 from werkzeug.exceptions import (
     BadRequest,
     NotFound,
+    Conflict,
     MethodNotAllowed,
     UnsupportedMediaType,
     InternalServerError,
@@ -197,6 +198,20 @@ def handle_method_not_allowed(error):
             "message": message,
         },
         status.HTTP_405_METHOD_NOT_ALLOWED,
+    )
+
+
+@api.errorhandler(Conflict)
+def handle_conflict(error):
+    """Handle 409 Conflict errors"""
+    message = str(error)
+    return (
+        {
+            "status": status.HTTP_409_CONFLICT,
+            "error": "Conflict",
+            "message": message,
+        },
+        status.HTTP_409_CONFLICT,
     )
 
 
