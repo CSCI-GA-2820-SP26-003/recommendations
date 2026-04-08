@@ -177,7 +177,7 @@ class TestYourResourceService(TestCase):
         """It should return JSON for 405 errors"""
         client = self._create_test_client()
 
-        resp = client.post("/api/recommendations/v1/health")
+        resp = client.post("/api/recommendations/v1/health/")
 
         self.assertEqual(resp.status_code, status.HTTP_405_METHOD_NOT_ALLOWED)
         self.assertTrue(resp.content_type.startswith("application/json"))
@@ -200,14 +200,12 @@ class TestYourResourceService(TestCase):
 
     def test_conflict_returns_json(self):
         """It should return JSON for 409 Conflict errors"""
-        # Mock Recommendation.find to raise a Conflict error
+        client = self._create_test_client()
         with patch(
             "service.routes.Recommendation.find",
             side_effect=Conflict("Resource conflict"),
         ):
-            resp = app.test_client().get(
-                f"{BASE_PATH}/recommendations/1"
-            )
+            resp = client.get("/api/recommendations/v1/recommendations/1")
         self.assertEqual(resp.status_code, status.HTTP_409_CONFLICT)
         self.assertTrue(resp.content_type.startswith("application/json"))
         data = resp.get_json()
