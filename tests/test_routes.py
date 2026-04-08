@@ -24,7 +24,7 @@ import sys
 import logging
 from unittest import TestCase
 from unittest.mock import patch
-from flask import abort
+from werkzeug.exceptions import Conflict
 from wsgi import app
 from service.models import Recommendation, db
 from service.common import status
@@ -200,12 +200,14 @@ class TestYourResourceService(TestCase):
 
     def test_conflict_returns_json(self):
         """It should return JSON for 409 Conflict errors"""
-        # Register a temporary route that triggers a 409
-        @app.route("/test-409")
-        def trigger_409():  # pylint: disable=unused-variable
-            abort(409, "Resource conflict")
-
-        resp = app.test_client().get("/test-409")
+        # Mock Recommendation.find to raise a Conflict error
+        with patch(
+            "service.routes.Recommendation.find",
+            side_effect=Conflict("Resource conflict"),
+        ):
+            resp = app.test_client().get(
+                f"{BASE_PATH}/recommendations/1"
+            )
         self.assertEqual(resp.status_code, status.HTTP_409_CONFLICT)
         self.assertTrue(resp.content_type.startswith("application/json"))
         data = resp.get_json()
