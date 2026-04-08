@@ -113,6 +113,27 @@ Scenario: Query Recommendations by Attribute
     Then I should see the message "Success"
     And I should see "1" recommendation in the results
 
+Scenario: Query Recommendations by Type Only
+    When I set the "Product ID" to "1"
+    And I set the "Recommended Product ID" to "2"
+    And I select "cross_sell" in the "Recommendation Type" dropdown
+    And I set the "Score" to "0.95"
+    And I press the "Create" button
+    Then I should see the message "Success"
+    When I press the "Clear" button
+    And I set the "Product ID" to "10"
+    And I set the "Recommended Product ID" to "20"
+    And I select "up_sell" in the "Recommendation Type" dropdown
+    And I set the "Score" to "0.50"
+    And I press the "Create" button
+    Then I should see the message "Success"
+    When I press the "Clear" button
+    And I select "cross_sell" in the "Search Recommendation Type" dropdown
+    And I press the "Search" button
+    Then I should see the message "Success"
+    And I should see "1" recommendation in the results
+    And I should see "cross_sell" in the results
+
 Scenario: Activate and Deactivate a Recommendation
     When I set the "Product ID" to "1"
     And I set the "Recommended Product ID" to "2"
