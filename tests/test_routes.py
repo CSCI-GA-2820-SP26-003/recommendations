@@ -24,7 +24,7 @@ import sys
 import logging
 from unittest import TestCase
 from unittest.mock import patch
-from werkzeug.exceptions import Conflict
+from werkzeug.exceptions import Conflict, InternalServerError
 from wsgi import app
 from service.models import Recommendation, db
 from service.common import status
@@ -210,6 +210,20 @@ class TestYourResourceService(TestCase):
         self.assertTrue(resp.content_type.startswith("application/json"))
         data = resp.get_json()
         self.assertEqual(data["error"], "Conflict")
+        self.assertIn("message", data)
+
+    def test_internal_server_error_returns_json(self):
+        """It should return JSON for 500 Internal Server Error responses"""
+        client = self._create_test_client()
+        with patch(
+            "service.routes.Recommendation.find",
+            side_effect=InternalServerError("Server failure"),
+        ):
+            resp = client.get("/api/recommendations/v1/recommendations/1")
+        self.assertEqual(resp.status_code, status.HTTP_500_INTERNAL_SERVER_ERROR)
+        self.assertTrue(resp.content_type.startswith("application/json"))
+        data = resp.get_json()
+        self.assertEqual(data["error"], "Internal Server Error")
         self.assertIn("message", data)
 
     def test_bad_request_returns_json(self):
