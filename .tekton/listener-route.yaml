@@ -1,0 +1,15 @@
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: el-cd-listener
+  labels:
+    app: cd-listener
+spec:
+  to:
+    kind: Service
+    name: el-cd-listener
+  port:
+    targetPort: 8080
+  tls:
+    termination: edge
+    insecureEdgeTerminationPolicy: Redirect
