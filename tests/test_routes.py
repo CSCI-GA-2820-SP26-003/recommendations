@@ -24,9 +24,17 @@ import sys
 import logging
 from unittest import TestCase
 from unittest.mock import patch
-from werkzeug.exceptions import Conflict
+from werkzeug.exceptions import (
+    BadRequest,
+    Conflict,
+    InternalServerError,
+    MethodNotAllowed,
+    NotFound,
+    UnsupportedMediaType,
+)
 from wsgi import app
-from service.models import Recommendation, db
+from service import create_app, routes
+from service.models import DataValidationError, Recommendation, db
 from service.common import status
 from tests.factories import RecommendationFactory
 
@@ -212,6 +220,20 @@ class TestYourResourceService(TestCase):
         self.assertEqual(data["error"], "Conflict")
         self.assertIn("message", data)
 
+    def test_internal_server_error_returns_json(self):
+        """It should return JSON for 500 Internal Server Error responses"""
+        client = self._create_test_client()
+        with patch(
+            "service.routes.Recommendation.find",
+            side_effect=InternalServerError("Server failure"),
+        ):
+            resp = client.get("/api/recommendations/v1/recommendations/1")
+        self.assertEqual(resp.status_code, status.HTTP_500_INTERNAL_SERVER_ERROR)
+        self.assertTrue(resp.content_type.startswith("application/json"))
+        data = resp.get_json()
+        self.assertEqual(data["error"], "Internal Server Error")
+        self.assertIn("message", data)
+
     def test_bad_request_returns_json(self):
         """It should return JSON for 400 errors with proper structure"""
         payload = {
@@ -227,6 +249,71 @@ class TestYourResourceService(TestCase):
         self.assertTrue(resp.content_type.startswith("application/json"))
         data = resp.get_json()
         self.assertIn("message", data)
+
+    def test_create_app_exits_when_database_initialization_fails(self):
+        """It should exit with code 4 when database initialization fails"""
+        with patch(
+            "service.models.db.create_all",
+            side_effect=Exception("database unavailable"),
+        ):
+            with self.assertRaises(SystemExit) as error:
+                create_app()
+
+        self.assertEqual(error.exception.code, 4)
+
+    def test_restx_error_handlers(self):
+        """It should return structured payloads from Flask-RESTX handlers"""
+        handlers = [
+            (
+                routes.handle_validation_error,
+                DataValidationError("bad data"),
+                status.HTTP_400_BAD_REQUEST,
+                "Bad Request",
+            ),
+            (
+                routes.handle_bad_request,
+                BadRequest("bad request"),
+                status.HTTP_400_BAD_REQUEST,
+                "Bad Request",
+            ),
+            (
+                routes.handle_not_found,
+                NotFound("missing"),
+                status.HTTP_404_NOT_FOUND,
+                "Not Found",
+            ),
+            (
+                routes.handle_method_not_allowed,
+                MethodNotAllowed(valid_methods=["GET"]),
+                status.HTTP_405_METHOD_NOT_ALLOWED,
+                "Method not Allowed",
+            ),
+            (
+                routes.handle_conflict,
+                Conflict("conflict"),
+                status.HTTP_409_CONFLICT,
+                "Conflict",
+            ),
+            (
+                routes.handle_unsupported_media,
+                UnsupportedMediaType("wrong media"),
+                status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+                "Unsupported media type",
+            ),
+            (
+                routes.handle_internal_error,
+                InternalServerError("server error"),
+                status.HTTP_500_INTERNAL_SERVER_ERROR,
+                "Internal Server Error",
+            ),
+        ]
+
+        for handler, error, expected_status, expected_error in handlers:
+            payload, http_status = handler(error)
+            self.assertEqual(http_status, expected_status)
+            self.assertEqual(payload["status"], expected_status)
+            self.assertEqual(payload["error"], expected_error)
+            self.assertIn("message", payload)
 
     def test_get_recommendation(self):
         """It should read a single recommendation"""
@@ -270,14 +357,130 @@ class TestYourResourceService(TestCase):
         self.assertIsNone(Recommendation.find(rec.id))
 
     def test_delete_recommendation_not_found(self):
-        """It should return 404 when deleting a non-existent recommendation"""
+        """It should return 204 when deleting a non-existent recommendation"""
         resp = app.test_client().delete(
             "/api/recommendations/v1/recommendations/0"
         )
-        self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertEqual(resp.status_code, status.HTTP_204_NO_CONTENT)
+        self.assertEqual(resp.get_data(as_text=True), "")
+
+    def test_apidocs_trailing_slash_redirects(self):
+        """It should support the homework-required /apidocs/ URL"""
+        resp = app.test_client().get("/apidocs/")
+
+        self.assertEqual(resp.status_code, status.HTTP_302_FOUND)
+        self.assertIn("/apidocs", resp.headers.get("Location", ""))
+
+    def test_api_index_lists_callable_endpoints(self):
+        """It should list API version, docs, and callable endpoints from /apiIndex"""
+        resp = app.test_client().get("/apiIndex")
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertTrue(resp.content_type.startswith("application/json"))
         data = resp.get_json()
-        self.assertIn("message", data)
+        self.assertEqual(data["service"], "recommendation")
+        self.assertEqual(data["version"], "1.0")
+        self.assertEqual(data["documentation"], "/apidocs/")
+        self.assertEqual(data["canonical_base_path"], "/recommendations")
+        self.assertIn("canonical", data["endpoints"])
+        self.assertIn("flask_restx", data["endpoints"])
+        self.assertIn("legacy", data["endpoints"])
+        canonical_paths = {
+            endpoint["path"] for endpoint in data["endpoints"]["canonical"]
+        }
+        self.assertIn("/recommendations", canonical_paths)
+        self.assertIn("/recommendations/{id}", canonical_paths)
+        self.assertIn("/recommendations/{id}/activate", canonical_paths)
+
+    def test_canonical_list_recommendations(self):
+        """It should list Recommendations from GET /recommendations"""
+        RecommendationFactory().create()
+
+        resp = app.test_client().get("/recommendations")
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        data = resp.get_json()
+        self.assertEqual(len(data), 1)
+
+    def test_canonical_create_recommendation(self):
+        """It should create Recommendations from POST /recommendations"""
+        payload = {
+            "product_id": 1,
+            "recommended_product_id": 2,
+            "recommendation_type": "cross_sell",
+            "score": 0.85,
+        }
+
+        resp = app.test_client().post(
+            "/recommendations",
+            json=payload,
+            content_type="application/json",
+        )
+
+        self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
+        self.assertIn("/recommendations/", resp.headers.get("Location", ""))
+        self.assertEqual(resp.get_json()["product_id"], 1)
+
+    def test_canonical_delete_missing_is_idempotent(self):
+        """It should return 204 when DELETE /recommendations/{id} is missing"""
+        resp = app.test_client().delete("/recommendations/0")
+
+        self.assertEqual(resp.status_code, status.HTTP_204_NO_CONTENT)
+        self.assertEqual(resp.get_data(as_text=True), "")
+
+    def test_restx_primary_routes(self):
+        """It should support the Flask-RESTX /api/recommendations routes"""
+        client = app.test_client()
+        payload = {
+            "product_id": 10,
+            "recommended_product_id": 20,
+            "recommendation_type": "up_sell",
+            "score": 0.75,
+        }
+
+        resp = client.get("/api/health/")
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp.get_json(), {"status": "OK"})
+
+        resp = client.post(
+            "/api/recommendations",
+            json=payload,
+            content_type="application/json",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
+        rec_id = resp.get_json()["id"]
+
+        resp = client.get("/api/recommendations")
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(resp.get_json()), 1)
+
+        resp = client.get(f"/api/recommendations/{rec_id}")
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp.get_json()["product_id"], 10)
+
+        payload["score"] = 0.95
+        resp = client.put(
+            f"/api/recommendations/{rec_id}",
+            json=payload,
+            content_type="application/json",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp.get_json()["score"], 0.95)
+
+        resp = client.put(f"/api/recommendations/{rec_id}/deactivate")
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertFalse(resp.get_json()["active"])
+
+        resp = client.put(f"/api/recommendations/{rec_id}/activate")
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertTrue(resp.get_json()["active"])
+
+        resp = client.put(f"/api/recommendations/{rec_id}/like")
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp.get_json()["like_count"], 1)
+
+        resp = client.delete(f"/api/recommendations/{rec_id}")
+        self.assertEqual(resp.status_code, status.HTTP_204_NO_CONTENT)
 
 
 ######################################################################

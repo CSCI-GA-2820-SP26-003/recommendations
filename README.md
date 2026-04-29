@@ -63,24 +63,42 @@ make lint
 
 ## API Reference
 
-All endpoints are under the base path `/api/recommendations/v1` by default.
+Swagger/OpenAPI documentation is available at `/apidocs/`. The documented
+Flask-RESTX API version is `1.0`.
+
+An API index with the service version, documentation link, and all callable
+endpoint groups is available at `/apiIndex`.
+
+The grading-compatible REST endpoints are available at `/recommendations`.
+The Flask-RESTX documented API is available under `/api`, and the legacy
+`/api/recommendations/v1` paths are still supported for backward compatibility.
 
 ### Service Info
 
 Method | URL | Description
 --- | --- | ---
-GET | `//` | Returns service name, environment, and base path
-GET | `/api/recommendations/v1/health` | Health check
+GET | `/health` | Health check
+GET | `/apiIndex` | API index with version and callable endpoints
+GET | `/api/health/` | Flask-RESTX health check
+GET | `/apidocs/` | Swagger/OpenAPI documentation
 
 ### Recommendation CRUD Endpoints
 
 Method | URL | Description | Request Body | Response Code
 --- | --- | --- | --- | ---
-POST | `/api/recommendations/v1/recommendations` | Create a recommendation | JSON (see below) | 201 Created
-GET | `/api/recommendations/v1/recommendations` | List all recommendations | None | 200 OK
-GET | `/api/recommendations/v1/recommendations/<id>` | Read a recommendation | None | 200 OK
-PUT | `/api/recommendations/v1/recommendations/<id>` | Update a recommendation | JSON (see below) | 200 OK
-DELETE | `/api/recommendations/v1/recommendations/<id>` | Delete a recommendation | None | 204 No Content
+POST | `/recommendations` | Create a recommendation | JSON (see below) | 201 Created
+GET | `/recommendations` | List all recommendations | None | 200 OK
+GET | `/recommendations/<id>` | Read a recommendation | None | 200 OK
+PUT | `/recommendations/<id>` | Update a recommendation | JSON (see below) | 200 OK
+DELETE | `/recommendations/<id>` | Delete a recommendation idempotently | None | 204 No Content
+
+### Recommendation Action Endpoints
+
+Method | URL | Description | Response Code
+--- | --- | --- | ---
+PUT | `/recommendations/<id>/activate` | Mark a recommendation active | 200 OK
+PUT | `/recommendations/<id>/deactivate` | Mark a recommendation inactive | 200 OK
+PUT | `/recommendations/<id>/like` | Increment the recommendation like count | 200 OK
 
 ### Create / Update Request Body
 
@@ -111,15 +129,23 @@ DELETE | `/api/recommendations/v1/recommendations/<id>` | Delete a recommendatio
 }
 ```
 
-### List with Pagination
+### List with Query and Pagination
 
-The list endpoint supports optional pagination via the `page` query parameter:
+The list endpoint supports filtering by `product_id`,
+`recommended_product_id`, and `recommendation_type`. It also supports optional
+pagination via the `page` query parameter:
 
 ```
-GET /api/recommendations/v1/recommendations?page=1
+GET /recommendations?product_id=1&recommendation_type=cross_sell&page=1
 ```
 
 Returns up to 10 results per page. Omit the `page` parameter to return all results.
+
+### Compatibility Paths
+
+The same CRUD and action operations are also available under
+`/api/recommendations` for Flask-RESTX and under
+`/api/recommendations/v1/recommendations` for older clients.
 
 ## Recommendation Model
 
