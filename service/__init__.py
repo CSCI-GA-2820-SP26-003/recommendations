@@ -20,8 +20,74 @@ and SQL database
 """
 import sys
 from flask import Flask, jsonify
+from werkzeug.exceptions import (
+    BadRequest,
+    Conflict,
+    InternalServerError,
+    UnsupportedMediaType,
+)
 from service import config
 from service.common import log_handlers
+from service.models import DataValidationError
+
+
+def register_error_handlers(app):
+    """Register JSON error handlers for routes outside Flask-RESTX."""
+
+    @app.errorhandler(404)
+    def not_found(error):  # pylint: disable=unused-variable
+        """Return JSON for 404 errors"""
+        return jsonify(
+            status=404,
+            error="Not Found",
+            message=str(error),
+        ), 404
+
+    @app.errorhandler(405)
+    def method_not_allowed(error):  # pylint: disable=unused-variable
+        """Return JSON for 405 errors"""
+        return jsonify(
+            status=405,
+            error="Method not Allowed",
+            message=str(error),
+        ), 405
+
+    @app.errorhandler(DataValidationError)
+    @app.errorhandler(BadRequest)
+    def bad_request(error):  # pylint: disable=unused-variable
+        """Return JSON for 400 errors"""
+        return jsonify(
+            status=400,
+            error="Bad Request",
+            message=str(error),
+        ), 400
+
+    @app.errorhandler(Conflict)
+    def conflict(error):  # pylint: disable=unused-variable
+        """Return JSON for 409 errors"""
+        return jsonify(
+            status=409,
+            error="Conflict",
+            message=str(error),
+        ), 409
+
+    @app.errorhandler(UnsupportedMediaType)
+    def unsupported_media_type(error):  # pylint: disable=unused-variable
+        """Return JSON for 415 errors"""
+        return jsonify(
+            status=415,
+            error="Unsupported media type",
+            message=str(error),
+        ), 415
+
+    @app.errorhandler(InternalServerError)
+    def internal_server_error(error):  # pylint: disable=unused-variable
+        """Return JSON for 500 errors"""
+        return jsonify(
+            status=500,
+            error="Internal Server Error",
+            message=str(error),
+        ), 500
 
 
 ############################################################
@@ -49,25 +115,10 @@ def create_app():
 
         # Register the HTML web UI at /
         routes.init_index_route(app)
+        routes.init_compatibility_routes(app)
 
         # App-level error handlers for routes outside Flask-RESTX
-        @app.errorhandler(404)
-        def not_found(error):  # pylint: disable=unused-variable
-            """Return JSON for 404 errors"""
-            return jsonify(
-                status=404,
-                error="Not Found",
-                message=str(error),
-            ), 404
-
-        @app.errorhandler(405)
-        def method_not_allowed(error):  # pylint: disable=unused-variable
-            """Return JSON for 405 errors"""
-            return jsonify(
-                status=405,
-                error="Method not Allowed",
-                message=str(error),
-            ), 405
+        register_error_handlers(app)
 
         try:
             db.create_all()

@@ -16,7 +16,7 @@ spec:
     spec:
       containers:
         - name: recommendations
-          image: image-registry.openshift-image-registry.svc:5000/zhaozhongliu-dev/recommendations:1.0
+          image: cluster-registry:5000/recommendations:1.0
           ports:
             - containerPort: 8080
               protocol: TCP
@@ -28,13 +28,13 @@ spec:
                   key: DATABASE_URI
           readinessProbe:
             httpGet:
-              path: /api/recommendations/v1/health
+              path: /health
               port: 8080
             initialDelaySeconds: 10
             periodSeconds: 5
           livenessProbe:
             httpGet:
-              path: /api/recommendations/v1/health
+              path: /health
               port: 8080
             initialDelaySeconds: 15
             periodSeconds: 10
