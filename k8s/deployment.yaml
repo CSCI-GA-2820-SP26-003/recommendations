@@ -16,7 +16,7 @@ spec:
     spec:
       containers:
         - name: recommendations
-          image: cluster-registry:5000/recommendations:1.0
+          image: image-registry.openshift-image-registry.svc:5000/zhaozhongliu-dev/recommendations:1.0
           ports:
             - containerPort: 8080
               protocol: TCP
