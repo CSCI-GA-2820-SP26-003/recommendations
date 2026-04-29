@@ -24,9 +24,17 @@ import sys
 import logging
 from unittest import TestCase
 from unittest.mock import patch
-from werkzeug.exceptions import Conflict, InternalServerError
+from werkzeug.exceptions import (
+    BadRequest,
+    Conflict,
+    InternalServerError,
+    MethodNotAllowed,
+    NotFound,
+    UnsupportedMediaType,
+)
 from wsgi import app
-from service.models import Recommendation, db
+from service import create_app, routes
+from service.models import DataValidationError, Recommendation, db
 from service.common import status
 from tests.factories import RecommendationFactory
 
@@ -241,6 +249,71 @@ class TestYourResourceService(TestCase):
         self.assertTrue(resp.content_type.startswith("application/json"))
         data = resp.get_json()
         self.assertIn("message", data)
+
+    def test_create_app_exits_when_database_initialization_fails(self):
+        """It should exit with code 4 when database initialization fails"""
+        with patch(
+            "service.models.db.create_all",
+            side_effect=Exception("database unavailable"),
+        ):
+            with self.assertRaises(SystemExit) as error:
+                create_app()
+
+        self.assertEqual(error.exception.code, 4)
+
+    def test_restx_error_handlers(self):
+        """It should return structured payloads from Flask-RESTX handlers"""
+        handlers = [
+            (
+                routes.handle_validation_error,
+                DataValidationError("bad data"),
+                status.HTTP_400_BAD_REQUEST,
+                "Bad Request",
+            ),
+            (
+                routes.handle_bad_request,
+                BadRequest("bad request"),
+                status.HTTP_400_BAD_REQUEST,
+                "Bad Request",
+            ),
+            (
+                routes.handle_not_found,
+                NotFound("missing"),
+                status.HTTP_404_NOT_FOUND,
+                "Not Found",
+            ),
+            (
+                routes.handle_method_not_allowed,
+                MethodNotAllowed(valid_methods=["GET"]),
+                status.HTTP_405_METHOD_NOT_ALLOWED,
+                "Method not Allowed",
+            ),
+            (
+                routes.handle_conflict,
+                Conflict("conflict"),
+                status.HTTP_409_CONFLICT,
+                "Conflict",
+            ),
+            (
+                routes.handle_unsupported_media,
+                UnsupportedMediaType("wrong media"),
+                status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+                "Unsupported media type",
+            ),
+            (
+                routes.handle_internal_error,
+                InternalServerError("server error"),
+                status.HTTP_500_INTERNAL_SERVER_ERROR,
+                "Internal Server Error",
+            ),
+        ]
+
+        for handler, error, expected_status, expected_error in handlers:
+            payload, http_status = handler(error)
+            self.assertEqual(http_status, expected_status)
+            self.assertEqual(payload["status"], expected_status)
+            self.assertEqual(payload["error"], expected_error)
+            self.assertIn("message", payload)
 
     def test_get_recommendation(self):
         """It should read a single recommendation"""
